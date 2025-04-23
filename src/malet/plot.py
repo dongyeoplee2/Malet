@@ -12,7 +12,7 @@ from matplotlib import style, lines, colors, cm, animation
 import seaborn as sns
 
 from .experiment import Experiment, ExperimentLog
-from .utils import str2value, df2richtable
+from .utils import str2value, df2richtable, get_wandb_sweep_exp_dir
 
 from rich import print
 from rich.panel import Panel
@@ -226,11 +226,13 @@ def draw_metric(tsv_file, plot_config, save_name='', preprcs_df=lambda *x: x):
                 sm_bestof['metric'] = best_of.pop('metric')
             
             # avgbest without 'step' and 'metric' in best_of
-            best_df = avgbest_df(df, 'metric_value',
-                                avg_over=avg_field, 
-                                best_over=optimized_field, 
-                                best_of=best_of,
-                                best_at_max=pcfg['best_at_max'])
+            best_df = avgbest_df(
+                df, 'metric_value',
+                avg_over=avg_field, 
+                best_over=optimized_field, 
+                best_of=best_of,
+                best_at_max=pcfg['best_at_max']
+            )
             
             # process 'step' and 'metric'
             if sm_bestof:
@@ -252,7 +254,7 @@ def draw_metric(tsv_file, plot_config, save_name='', preprcs_df=lambda *x: x):
                 best_df = homogenize_df(avg_df, sm_df, {}, 'total_steps')
         
         # check if there is any duplicate key_field configs in the best_df
-        assert not best_df.reset_index(list({*best_df.index.names}-key_field)).index.duplicated().any(), \
+        assert not best_df.reset_index(list({*best_df.index.names}-key_field-{'metric'})).index.duplicated().any(), \
             f"Duplicate values in found in dataframe: \n" + str(
                 best_df.reset_index(best_df.index.names)
                     .groupby([*key_field])
@@ -515,6 +517,19 @@ def run(argv, preprcs_df):
     style.use(plot_config['style'])
     
     # get paths
+    if plot_config['wandb_sweep_id']:
+        base_dir = plot_config['exp_folder']
+        wandb_sweep_id = plot_config['wandb_sweep_id']
+        assert wandb_sweep_id.count('/')==2, f'wandb_sweep_id should be in the form of entity/project/sweep_id, but you passed {wandb_sweep_id}.'
+        entity, project, sweep_id = wandb_sweep_id.split('/')
+        plot_config['exp_folder'] = get_wandb_sweep_exp_dir(base_dir, entity, project, sweep_id)
+        if not os.path.exists(plot_config['exp_folder']):
+            create_dir(plot_config['exp_folder'])
+        _, tsv_file, fig_dir = Experiment.get_paths(plot_config['exp_folder'])
+        if not os.path.exists(tsv_file):
+            log = ExperimentLog.from_wandb_sweep(entity, project, [sweep_id], tsv_file, get_all_steps=True)
+            log.to_tsv()
+    
     _, tsv_file, fig_dir = Experiment.get_paths(plot_config['exp_folder'])
     save_dir = os.path.join(fig_dir, plot_config['mode'])
     
@@ -545,7 +560,8 @@ def run(argv, preprcs_df):
     
 def main(preprcs_df = lambda *x: x):
     
-    flags.DEFINE_string(        'exp_folder'            , ''                        , "Experiment folder path.")
+    flags.DEFINE_string(        'exp_folder'            , ''                        , "Experiment folder path (plot save paths for wandb).")
+    flags.DEFINE_string(        'wandb_sweep_id'        , ''                        , "wandb entity/project/sweep_id.")
     flags.DEFINE_string(        'mode'                  , 'curve-step-val_loss'     , "Plot mode.")
     
     # data processing
@@ -580,6 +596,8 @@ def main(preprcs_df = lambda *x: x):
     flags.DEFINE_integer(       'font_size'             , 22          , "Font size of title and label.")
 
     flags.DEFINE_float(         'marker_size'           , 10          , "Size of marker.")
+    
+    flags.mark_flag_as_required('exp_folder')
 
     app.run(partial(run, preprcs_df=preprcs_df))
     

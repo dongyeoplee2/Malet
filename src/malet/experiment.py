@@ -3,7 +3,7 @@ import copy
 import yaml, re
 import traceback
 from functools import reduce, partial
-from typing import ClassVar, Any, Mapping, Callable, Optional, Union, Tuple, List, Dict
+from typing import ClassVar, Any, Mapping, Callable, Optional, Union, Tuple, List, Dict, Sequence
 from dataclasses import dataclass
 from itertools import product, chain
 from datetime import datetime, timedelta
@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 from git import Repo
+import wandb
 
 from rich import print
 from rich.progress import track
@@ -344,6 +345,98 @@ class ExperimentLog:
       use_filelock=use_filelock
     )
   
+  @classmethod
+  def from_wandb_sweep(
+      cls,
+      entity: str,
+      project: str,
+      sweep_ids: List[str],
+      logs_file: str,
+      get_all_steps: bool = False,
+      filter_dict: Optional[dict] = None,
+      get_metrics: Optional[List[str]] = None,
+  ) -> 'ExperimentLog':
+    """Create ExperimentLog from wandb sweep.
+    
+    Args:
+        sweep_ids (List[str]): List of wandb sweep ids to load.
+        entity (str): wandb entity name.
+        project (str): wandb project name.
+        logs_file (str): File path to tsv file.
+        get_all_steps (bool, optional): Whether to get all steps of the metrics. Defaults to False.
+        filter_dict (dict | None, optional): Filter for runs. Defaults to None.
+        get_metrics (List[str] | None, optional): List of metrics to get. Defaults to None.
+    
+    Returns:
+        ExperimentLog: New experiment log object.
+    """
+    if filter_dict is not None:
+      filter_dict = {k: (v if isinstance(v, Sequence) else [v]) for k, v in filter_dict.items()}
+    
+    api = wandb.Api()
+
+    # Get all runs from the sweeps
+    runs = []
+    for sweep_id in sweep_ids:
+      sweep = api.sweep('/'.join([entity, project, sweep_id]))
+      runs += sweep.runs
+
+    # Process runs with progress bar
+    static_configs = {}
+    grid_fields = set()
+    metric_fields = set()
+    filtered_runs = []
+    for run in runs:
+      # Filter runs based on filter
+      if (
+        filter_dict is not None and
+        not all((run.config[k] in vs) for k, vs in filter_dict.items())
+      ):
+        continue
+      
+      # Add to filtered runs
+      filtered_runs.append(run)
+      
+      # Update static_configs
+      for key, value in run.config.items():
+        if key not in static_configs:
+          static_configs[key] = value
+        elif static_configs[key] != value:
+          static_configs.pop(key, None)  # Remove if differing cases occur
+          grid_fields.add(key)  # Add to grid fields if differing cases occur
+      metric_fields.update(run.summary.keys()) # Collect metric fields
+    
+    # Filter runs if filter is provided
+    if get_metrics is not None:
+      metric_fields &= set(get_metrics)
+      
+    grid_fields = list(grid_fields)
+    metric_fields = list(metric_fields)
+
+    # process dataframe
+    data = []
+    for run in track(filtered_runs, description="Processing runs"):
+      grid_configs = {key: run.config[key] for key in grid_fields}
+      row = {**grid_configs, **run.summary}
+      if get_all_steps:
+        history = run.history()
+        all_step_metrics = {
+          k: history[k].tolist() for k in metric_fields if k in history.columns
+        }
+        row = {**row, **all_step_metrics}
+      data.append(row)
+
+    df = pd.DataFrame(data)
+    df.set_index(grid_fields, inplace=True)
+    
+    return cls(
+      df,
+      static_configs,
+      logs_file=logs_file,
+      use_filelock=False
+    )
+      
+    
   
   # tsv handlers.
   # -----------------------------------------------------------------------------

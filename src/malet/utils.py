@@ -260,3 +260,6 @@ def path_common_decomposition(paths):
     paths = [p[1:] for p in paths]
   non_common = [os.path.join(*p) for p in paths]
   return common, non_common
+
+def get_wandb_sweep_exp_dir(base_dir, entity, project, sweep_id):
+  return os.path.join(base_dir, project, sweep_id)
