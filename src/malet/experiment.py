@@ -228,6 +228,30 @@ class ExperimentLog:
   def metric_fields(self): return list(self.df)
 
   def grid_dict(self) -> Dict[str, Any]:
+    """Get all values for each index field in the log.
+    This is useful for getting all possible values for each field in the log.
+    For example, if the log.df has 3 fields: 'a', 'b', 'c', and the values are:
+    
+    ```
+    optimizer  lr    weight_decay
+    sgd        0.1   0.01         
+    sgd        0.1   0.001        
+    adam       0.01  0.01        
+    adam       0.01  0.001     
+    ```
+    
+    Then the output will be:
+    ```python
+    {
+      'optimizer': ['sgd', 'adam'],
+      'lr': [0.1, 0.01],
+      'weight_decay': [0.01, 0.001]
+    }
+    ```
+
+    Returns:
+        dict: Dictionary of all values for each index field in the log.
+    """
     return {k: sorted(set(self.df.index.get_level_values(k))) for k in self.grid_fields}
   
   # Constructors.
@@ -256,10 +280,12 @@ class ExperimentLog:
     """
     assert metric_fields is not None, 'Specify the metric fields of the experiment.'
     assert not (f:=set(grid_fields) & set(metric_fields)), f'Overlapping field names {f} in grid_fields and metric_fields. Remove one of them.'
-    return cls(pd.DataFrame(columns=grid_fields+metric_fields).set_index(grid_fields), 
-               static_configs, 
-               logs_file=logs_file, 
-               use_filelock=use_filelock)
+    return cls(
+      pd.DataFrame(columns=grid_fields+metric_fields).set_index(grid_fields), 
+      static_configs, 
+      logs_file=logs_file, 
+      use_filelock=use_filelock
+    )
   
   @classmethod
   def from_config_iter(
@@ -280,11 +306,13 @@ class ExperimentLog:
     Returns:
         ExperimentLog: New experiment log object.
     """
-    return cls.from_fields(config_iter.grid_fields, 
-                           metric_fields, 
-                           config_iter.static_configs, 
-                           logs_file, 
-                           use_filelock=use_filelock)
+    return cls.from_fields(
+      config_iter.grid_fields, 
+      metric_fields, 
+      config_iter.static_configs, 
+      logs_file, 
+      use_filelock=use_filelock
+    )
 
   @classmethod
   def from_tsv(
@@ -309,10 +337,12 @@ class ExperimentLog:
     else:
       logs = cls.parse_tsv(logs_file, parse_str=parse_str)
       
-    return cls(logs['df'], 
-               logs['static_configs'],
-               logs_file, 
-               use_filelock=use_filelock)
+    return cls(
+      logs['df'], 
+      logs['static_configs'],
+      logs_file, 
+      use_filelock=use_filelock
+    )
   
   
   # tsv handlers.
