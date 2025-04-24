@@ -33,7 +33,7 @@ from .utils import (
   QueuedFileLock,
   FuncTimeoutError,
   settimeout_func, 
-  path_common_decomposition
+  path_common_decomposition,
 )
 
 ExpFunc = Union[
@@ -835,8 +835,8 @@ class ExperimentLog:
                           end_section=(i==len(same_fields)-1))
 
     rd = lambda s, i: (
-      f'[on {"red" if i%2 else "dark_red"}]{s}'
-      ' [/on {"red" if i%2 else "dark_red"}]'
+      f'[on {"red" if i%2 else "dark_red"}]{s} '
+      f'[/on {"red" if i%2 else "dark_red"}]'
     )
     for i, k in enumerate(new_to_self):
       i += len(same_fields)
@@ -857,7 +857,7 @@ class ExperimentLog:
     print(
       Align(
         Panel(
-          f'Detected [bold red]{len(new_to_self+new_to_othr)}[/bold red]'
+          f'Detected [bold red]{len(new_to_self+new_to_othr)}[/bold red] '
           'conflicts to resolve.',
           padding=(1, 3)
         ),
@@ -1020,7 +1020,7 @@ class ExperimentLog:
           matching experiments. Defaults to True.
     """
     for other in others:
-      self, other = self.resolve_merge_conflict(other)
+      self, other = self.resolve_merge_conflicts(other)
       self.__merge_one(other, same=same)
 
   @staticmethod
