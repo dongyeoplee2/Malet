@@ -282,7 +282,7 @@ def draw_metric(tsv_file, plot_config, save_name='', preprcs_df=lambda *x: x):
             Align(
                 Columns(
                     [Panel('\n'.join([f'- {k:{max(map(len, specified_field))}s} : {best_df.index.get_level_values(k)[0]}' for k in sorted(specified_field)]), padding=(1, 3)),
-                    df2richtable(show_df, max=50)]
+                    df2richtable(show_df, max_row_len=50)]
                 ), align='center'
             )
         )

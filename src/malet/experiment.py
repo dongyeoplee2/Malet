@@ -1,3 +1,6 @@
+"""This module provides classes and utilities for managing and executing
+experiments with structured configurations, logging, and checkpointing."""
+
 import os, glob, shutil, io
 import copy
 import yaml, re
@@ -9,9 +12,6 @@ from typing import (
 from dataclasses import dataclass
 from itertools import product, chain
 from datetime import datetime, timedelta
-
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import pandas as pd
 import numpy as np
@@ -34,7 +34,11 @@ from .utils import (
   FuncTimeoutError,
   settimeout_func, 
   path_common_decomposition,
+  df2richtable
 )
+
+import warnings
+warnings.simplefilter(action='ignore')
 
 ExpFunc = Union[
   Callable[[ConfigDict], dict],
@@ -1130,6 +1134,135 @@ class ExperimentLog:
     return fields(self)==fields(other)
   
 
+  def drop_duplicates(self):
+    """Drop duplicate entries and provides CLI to resolve conflicting
+    duplicates.
+    
+    Resolves duplicates with same grid fields but different metric fields.
+    If the duplicates also has same metric fields, they will be automatically
+    removed but one.
+    """
+    if self.df.index.nlevels==0: return
+    
+    # get duplicates
+    grids_dup = self.df.index.duplicated(keep=False)
+    duplicates = pd.DataFrame(self.df.loc[grids_dup])
+    non_duplicates = pd.DataFrame(self.df.loc[~grids_dup])
+    
+    # print duplicates
+    print(
+      f'\nDuplicate entries detected: {len(duplicates)}/{len(self)}',
+      f'({len(duplicates.index.unique())+(len(non_duplicates))} unique configs)'
+    )
+    
+    # first change all lists to tuples for duplicate comparison (hashable)
+    # and remove other unhashable types
+    def __process_unhashable(x):
+      try:
+        hash(x)
+        return x
+      except TypeError:
+        if isinstance(x, list):
+          return list2tuple(x)
+        return None
+    duplicates = duplicates.applymap(__process_unhashable)
+    
+    # separate trivial duplicates (same metric fields) and conflict duplicates
+    trivial_dups = duplicates.duplicated(keep=False)
+    conflict_dups = duplicates[~trivial_dups]
+    trivial_dups = duplicates[trivial_dups]
+    
+    # Automatically remove duplicates with identical metric fields
+    to_remove_dups = trivial_dups.duplicated(keep='first')
+    trivial_deduped = trivial_dups[~to_remove_dups]
+    non_duplicates = pd.concat([non_duplicates, trivial_deduped])
+    print(f'Removed {len(to_remove_dups)} trivial duplicates.')
+    
+    # Iterate through remaining duplicates for resolution
+    if len(conflict_dups) > 1:
+      print(
+        Align(
+          Panel(
+            f'Detected [bold red]{len(conflict_dups)}[/bold red] conflicting '
+            f'duplicates to resolve. '
+            f'([bold cyan]{len(conflict_dups.index.unique())}[/bold cyan] '\
+            'unique configs)',
+            padding=(1, 3)
+          ),
+          align='center'
+        )
+      )
+      while True:
+        conf_handle = input('Manually resolve? (y/n): ')
+        if conf_handle.lower() in ['y', 'yes', 'n', 'no']: break
+        print('Invalid input. Please enter "y" or "n".')
+      manually_resolve = conf_handle.lower()[0]=='y'
+        
+      if manually_resolve:
+        print('\n[bold][Manually resolving duplicates][/bold]')
+      else:
+        print('Automatically resolving conflict by keeping first row of each '
+              'config.')
+      
+      idx_len = len(self.grid_fields)
+      conflict_config_idxs = conflict_dups.index.unique()
+      for c_i, idx in enumerate(conflict_config_idxs):
+        duplicate_group = conflict_dups.loc[idx]
+        
+        if manually_resolve:
+          # print config
+          tab = Table()
+          for k in self.grid_fields:
+            tab.add_column(k)
+          tab.add_row(*map(str, idx))
+          print(f'│\n├─[{c_i+1}/{len(conflict_config_idxs)}]', tab)
+          
+          # find conflicting column and resolve by user input individually
+          conflict_cn = [
+            c for c in duplicate_group.columns if duplicate_group[c].nunique()>1
+          ]
+          print(f'│  Conflicts in {len(conflict_cn)} column(s):',
+                ", ".join(conflict_cn))
+          for i, cn in enumerate(conflict_cn):
+            col = duplicate_group[cn]
+            print(f'│  Resolve column {cn} ({i+1}/{len(conflict_cn)})')
+            print(
+              df2richtable(
+                duplicate_group,
+                highlight_columns=[cn],
+                max_col_width=3,
+                col_center=cn,
+                max_seq_value_len=3,
+                alternating_row_colors=True,
+              )
+            )
+            
+            while True:
+              choice = input(f'│  Select row index (0-{len(col)-1}): ')
+              if choice in [*map(str, range(len(col)))]: break
+              print('│  Invalid input. Please enter a number between 0 and '
+                    f'{len(col)-1}.')
+            duplicate_group.iloc[0][cn] = list(col)[int(choice)]
+            
+        # update the DataFrame with resolved duplicates
+        non_duplicates.loc[idx, :] = list(duplicate_group.iloc[0])
+        
+    # Update the DataFrame to remove resolved duplicates
+    non_duplicates = non_duplicates.applymap(
+      lambda x: list(x) if isinstance(x, tuple) else x
+    )
+    print(
+      Align(
+        Panel(
+          f'Duplicates resolved (rows: [bold cyan]{len(self)}[/bold cyan]->'\
+            f'[bold cyan]{len(non_duplicates)}[/bold cyan]).',
+          padding=(1, 3)
+        ),
+        align='center'
+      )
+    )
+    self.df = non_duplicates
+    
   def melt_and_explode_metric(
     self,
     df: Optional[pd.DataFrame]=None,

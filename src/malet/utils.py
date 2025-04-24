@@ -1,5 +1,6 @@
+
 import os, shutil, time, uuid
-from typing import Optional
+from typing import Optional, Sequence
 from ast import literal_eval
 from contextlib import ContextDecorator
 
@@ -13,41 +14,171 @@ from ctypes import py_object
 from ctypes import pythonapi
 
 from absl import logging
-
 from rich.table import Table
 
-def create_dir(dir):
+import warnings
+warnings.simplefilter(action='ignore')
+
+def create_dir(dir, overwrite=False):
+  """Creates a directory at the specified path. If the directory already exists, 
+  it can optionally overwrite its contents.
+
+  Args:
+    dir (str): The path of the directory to create.
+    overwrite (bool, optional): If True and the directory exists, 
+      all its contents will be removed. Defaults to False.
+  """
   if os.path.exists(dir):
-    for f in os.listdir(dir):
-      if os.path.isdir(os.path.join(dir, f)):
-        shutil.rmtree(os.path.join(dir, f))
-      else:
-        os.remove(os.path.join(dir, f))
+    if overwrite:
+      for f in os.listdir(dir):
+        if os.path.isdir(os.path.join(dir, f)):
+          shutil.rmtree(os.path.join(dir, f))
+        else:
+          os.remove(os.path.join(dir, f))
   else:
     os.makedirs(dir)
-    
 
-def df2richtable(df, title=None, max=None):
+def to_eng_str(num, long_than=4, precision=3):
+  """Convert a number to engineering notation with a specified precision.
+
+  Args:
+    num (float): The number to convert.
+    long_than (int, optional): The minimum length of the number string. 
+      Defaults to 4.
+    precision (int, optional): The number of decimal places to include. 
+      Defaults to 3.
+
+  Returns:
+    str: The number in engineering notation.
+  """
+  if not isinstance(num, (int, float)):
+    return str(num)
+    
+  if 10**-long_than < abs(num) < 10**long_than:
+    num = str(num)
+    if len(num) > long_than:
+      return num[:long_than]
+    return num
+
+  return f'{num:.{precision}e}'
+
+
+def df2richtable(
+  df,
+  title=None,
+  max_row_len=None,
+  highlight_columns: Optional[list]=None,
+  max_col_width=None,
+  col_center=None,
+  max_seq_value_len=None,
+  list_centers: Optional[dict]=None,
+  highlight_list_centers=False,
+  alternating_row_colors=False,
+  use_eng_str=False,
+):
+  def _trnc(l_len, width=None, center=0):
+    if not width or l_len <= width:
+      return (0, l_len), (False, False), 0
+    mid = width // 2
+    raw_lr = (center - mid, center + mid + 1)
+    trunc_lr = (raw_lr[0] > 0, raw_lr[1] < l_len)
+    shift = 0
+    if not trunc_lr[0]:
+      shift = -raw_lr[0]
+    elif not trunc_lr[1]:
+      shift = l_len - raw_lr[1]
+    final_lr = (i + shift for i in raw_lr)
+    center_idx = mid - shift
+    return final_lr, trunc_lr, center_idx
+  
+  def add_trnc_ind(l, trc, s='...', sft=0):
+    if trc[0]:
+      l = l[:sft] + [s] + l[sft:]
+    if trc[1]:
+      l = l + [s]
+    return l 
+  
+  idx_len = len(df.index.names)
+  col_center = df.columns.get_loc(col_center or df.columns[0])
+  col_lr, is_trnc_col_lr, _ = _trnc(len(df.columns), max_col_width, col_center)
+  df = df[df.columns[slice(*col_lr)]]
+  
   df = df.reset_index()
   df_len = len(df)
   
-  if max:
-    df_tail = str(len(df)), *map(str, df.tail(1).iloc[0].values)
-    df = df.head(max)
+  if max_row_len:
+    df_tail = len(df), *df.tail(1).iloc[0].values
+    df = df.head(max_row_len)
   
+  list_centers = list_centers or {}
+  centers = [None] + [list_centers.get(n, None) for n in df.columns]
+  centers = add_trnc_ind(centers, is_trnc_col_lr, s=None, sft=idx_len+1)
+    
+  highlight_columns = highlight_columns or []
+  h_col = [None] + [n in highlight_columns for n in df.columns]
+  h_col = add_trnc_ind(h_col, is_trnc_col_lr, s=None, sft=idx_len+1)
+    
   table = Table(title=title)
   table.add_column('id')
-  for f in list(df):       
+  for f in add_trnc_ind(list(df), is_trnc_col_lr, sft=idx_len):
     table.add_column(f)
   
-  for row in df.itertuples(name=None):
-    table.add_row(*map(str, row))
+  ilen = len(df.index.names) + is_trnc_col_lr[0]
+  def _process_entry(v, col_i):
+    clr = lambda s: f'[on red]{s}[/on red]' if h_col[col_i] else str(s)
+    if (
+      not max_seq_value_len or
+      not isinstance(v, Sequence) or
+      len(v) <= max_seq_value_len
+    ):
+      if use_eng_str and isinstance(v, (int, float)):
+        v = to_eng_str(v, precision=0)
+      return clr(v)
+    
+    par = '[]' if isinstance(v, list) else '()'
+    is_tuple = isinstance(v, tuple)
+    v = list(v)
+    
+    l2s = lambda l: par[0] + ', '.join(map(str, l)) + par[1]
+    
+    # if v is seq
+    c = centers[col_i] or 0
+    ml = max_seq_value_len
+    
+    lr, is_trnc_lr, c_i = _trnc(len(v), ml, c)
+    slc_l = v[slice(*lr)]
+    slc_l = add_trnc_ind(slc_l, is_trnc_lr, s='...', sft=0)
+    
+    if use_eng_str:
+      slc_l = [to_eng_str(n, precision=0) for n in slc_l]
+    if highlight_list_centers:
+      
+      slc_l[c_i+idx_len] = clr(slc_l[c_i+idx_len])
+      return l2s(slc_l)
+    else:
+      return clr(l2s(tuple(slc_l) if is_tuple else slc_l))
+    
+  prev_row = None
+  for i, row in enumerate(df.itertuples(name=None)):
+    print_row = [*row]
+    if prev_row:
+      print_row = ['' if p==r else r for p, r in zip(prev_row, print_row)]
+    print_row = add_trnc_ind(print_row, is_trnc_col_lr, sft=idx_len+1)
+    
+    table.add_row(
+      *[_process_entry(v, j) for j, v in enumerate(print_row)],
+      style="on bright_black" if (alternating_row_colors and i%2) else ""
+    )
+    prev_row = row
+    
   
-  if max and max<df_len:
+  if max_row_len and max_row_len<df_len:
     table.add_row('', *(['']*len(df.columns)))
     table.add_row('...', *(['...']*len(df.columns)))
     table.add_row('', *(['']*len(df.columns)))
-    table.add_row(*df_tail)
+    print(df_tail[0])
+    df_tail = add_trnc_ind(df_tail, is_trnc_col_lr, sft=idx_len+1)
+    table.add_row(*[_process_entry(v, j) for j, v in enumerate(df_tail)])
     
   return table
 
