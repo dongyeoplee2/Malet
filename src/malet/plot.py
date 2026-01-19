@@ -1,36 +1,28 @@
 import os
 import re
-import yaml
 from functools import partial
 from itertools import product
 
-from absl import app, flags
-
-import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import style, lines, colors, cm, animation
+import numpy as np
 import seaborn as sns
-
-from .experiment import Experiment, ExperimentLog
-from .utils import str2value, df2richtable, get_wandb_sweep_exp_dir
-
+import yaml
+from absl import app, flags
+from matplotlib import animation, cm, colors, lines, style
 from rich import print
-from rich.panel import Panel
-from rich.columns import Columns
 from rich.align import Align
+from rich.columns import Columns
+from rich.panel import Panel
 from rich.progress import Progress
 from rich.status import Status
 
-from .plot_utils.data_processor import avgbest_df, select_df, homogenize_df
-from .plot_utils.plot_drawer import (
-    ax_draw_curve,
-    ax_draw_best_stared_curve,
-    ax_draw_bar,
-    ax_draw_heatmap,
-    ax_draw_scatter,
-    ax_draw_scatter_heat
-)
-from .plot_utils.utils import merge_dict, default_style, ax_styler, create_dir
+from .experiment import Experiment, ExperimentLog
+from .plot_utils.data_processor import avgbest_df, homogenize_df, select_df
+from .plot_utils.plot_drawer import (ax_draw_bar, ax_draw_best_stared_curve,
+                                     ax_draw_curve, ax_draw_heatmap,
+                                     ax_draw_scatter, ax_draw_scatter_heat)
+from .plot_utils.utils import ax_styler, create_dir, default_style, merge_dict
+from .utils import df2richtable, get_wandb_sweep_exp_dir, str2value
 
 FLAGS = flags.FLAGS
 
@@ -411,7 +403,7 @@ def draw_metric(tsv_file, plot_config, save_name='', preprcs_df=lambda *x: x):
                     for ri, row_v in enumerate(row_vs[::-1]):
                         ax = axs[ri, ci]
                         
-                        for mlvs, st in zip(mlines, styles[::-1]):
+                        for mlvs, st in zip(mlines, styles):
                             try:
                                 p_df = select_df(best_df, {k: v for k, v in zip([*pmlf, *pcrfn, pani], [*mlvs, col_v, row_v, aniv]) if k}, *x_fields)
                             except: # for log with incomplete grid
@@ -503,34 +495,22 @@ def draw_metric(tsv_file, plot_config, save_name='', preprcs_df=lambda *x: x):
             extra = {'linewidth': 0} if s=='marker' else {}
                 
             vs = sorted(set(df.index.get_level_values(k)))
-            vs = [v.replace('_', ' ').upper() if isinstance(v, str) else v for v in vs][1]
-            legendlines += [lines.Line2D([], [], **{**pcfg['line_style'], **base_styles, **first_styles, **extra, **{s: ss}}) for ss in [*style_dict[s]][:len(vs)]][:2][::-1] + \
+            vs = [v.replace('_', ' ').capitalize() if isinstance(v, str) else v for v in vs]
+            legendlines += [lines.Line2D([], [], alpha=0)] + \
+                        [lines.Line2D([], [], **{**pcfg['line_style'], **base_styles, **first_styles, **extra, **{s: ss}}) for ss in [*style_dict[s]][:len(vs)]] + \
                         ([lines.Line2D([], [], alpha=0) for _ in range(max_row-len(vs))] if is_wide else [])
-            # legendlabels += [*vs] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
-            legendlabels += ['SAM$_{(200e)}$', 'SGD$_{(400e)}$'] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
-            # legendlabels += ['SAM$_{(200e)}$-SGD$_{(400e)}$'] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
-            # vs = [v.replace('_', ' ').capitalize() if isinstance(v, str) else v for v in vs]
-            # legendlines += [lines.Line2D([], [], alpha=0)] + \
-            #             [lines.Line2D([], [], **{**pcfg['line_style'], **base_styles, **first_styles, **extra, **{s: ss}}) for ss in [*style_dict[s]][:len(vs)]] + \
-            #             ([lines.Line2D([], [], alpha=0) for _ in range(max_row-len(vs))] if is_wide else [])
-            # legendlabels += [f"[{k.replace('_', ' ').capitalize()}]", *vs] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
-        
+            legendlabels += [f"[{k.replace('_', ' ').capitalize()}]", *vs] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
+         
         ax.legend(handles=legendlines, labels=legendlabels, **legend_style, #**pcfg['ax_style'].pop('legend', [{}])[0], 
                     ncol=len(pmlf) if is_wide else 1, columnspacing=0.8, handlelength=None if len(pmlf)==1 else 1.5)
     
     return best_df, fig, ani_artists, save_name
-    
 
-def run(argv, preprcs_df):
-    if len(argv)>2:
-        raise app.UsageError('Too many command-line arguments.')
-    
-    # Preprocess plot_config
-    flag_dict = FLAGS.flag_values_dict()
-    
+
+def plot_run(flag_dict, preprcs_df=lambda *x: x):
     plot_config = {**default_style, **flag_dict}
-    if FLAGS.plot_config!='':
-        with open(FLAGS.plot_config) as f:
+    if flag_dict["plot_config"]!='':
+        with open(flag_dict["plot_config"]) as f:
             plot_config = yaml.safe_load(f.read())
             plot_config = get_plot_config(plot_config, flag_dict)
     
@@ -598,6 +578,16 @@ def run(argv, preprcs_df):
     img_tail = 'gif' if plot_config['animation_field'] else 'pdf'
     print('\n', Align(Panel(f'save {{plot, table}} at: {fig_dir}/[bold blue_violet]{plot_config["mode"]}[/bold blue_violet]/[bold spring_green1]{save_name}[/bold spring_green1].{{{img_tail}, tsv}}', 
                       title='Plot complete', padding=(1, 3), expand=False), align='center'), '\n')
+       
+
+def run(argv, preprcs_df):
+    if len(argv)>2:
+        raise app.UsageError('Too many command-line arguments.')
+    
+    # Preprocess plot_config
+    flag_dict = FLAGS.flag_values_dict()
+    plot_run(flag_dict, preprcs_df=preprcs_df)
+    
 
     
 def main(preprcs_df = lambda *x: x):
