@@ -1,43 +1,37 @@
 """This module provides classes and utilities for managing and executing
 experiments with structured configurations, logging, and checkpointing."""
 
-import os, glob, shutil, io
 import copy
-import yaml, re
+import glob
+import io
+import os
+import re
+import shutil
 import traceback
-from functools import reduce, partial
-from typing import (
-  ClassVar, Any, Mapping, Callable, Optional, Union, Tuple, List, Dict, Sequence
-)
+import warnings
 from dataclasses import dataclass
-from itertools import product, chain
 from datetime import datetime, timedelta
+from functools import partial, reduce
+from itertools import chain, product
+from typing import (Any, Callable, ClassVar, Dict, List, Mapping, Optional,
+                    Sequence, Tuple, Union)
 
-import pandas as pd
 import numpy as np
-from git import Repo
+import pandas as pd
 import wandb
-
+import yaml
+from absl import logging
+from git import Repo
+from ml_collections.config_dict import ConfigDict
 from rich import print
+from rich.align import Align
+from rich.panel import Panel
 from rich.progress import track
 from rich.table import Table
-from rich.panel import Panel
-from rich.align import Align
 
-from absl import logging
-from ml_collections.config_dict import ConfigDict
+from .utils import (FuncTimeoutError, QueuedFileLock, df2richtable, list2tuple,
+                    path_common_decomposition, settimeout_func, str2value)
 
-from .utils import (
-  list2tuple,
-  str2value,
-  QueuedFileLock,
-  FuncTimeoutError,
-  settimeout_func, 
-  path_common_decomposition,
-  df2richtable
-)
-
-import warnings
 warnings.simplefilter(action='ignore')
 
 ExpFunc = Union[
@@ -485,12 +479,17 @@ class ExperimentLog:
     grid_fields = set()
     metric_fields = set()
     filtered_runs = []
+    state_stats = {}
     for run in runs:
       # Filter runs based on filter
       if (
         filter_dict is not None and
         not all((run.config[k] in vs) for k, vs in filter_dict.items())
       ):
+        continue
+      
+      if (s := run.state) not in ["finished", "completed"]:
+        state_stats[s] = state_stats.get(s, 0) + 1
         continue
       
       # Add to filtered runs
@@ -504,6 +503,9 @@ class ExperimentLog:
           static_configs.pop(key, None)  # Remove if differing cases occur
           grid_fields.add(key)  # Add to grid fields if differing cases occur
       metric_fields.update(run.summary.keys()) # Collect metric fields
+      
+    if state_stats:
+      logging.warning(f"Skipping {sum(state_stats.values())}/{len(runs)} runs with states: {state_stats}")
     
     # Filter runs if filter is provided
     if get_metrics is not None:
@@ -512,22 +514,53 @@ class ExperimentLog:
     grid_fields = list(grid_fields)
     metric_fields = list(metric_fields)
 
+    def __preprocess_value(v):
+      if isinstance(v, list):
+        return tuple(v)
+      return v
+
     # process dataframe
     data = []
     for run in track(filtered_runs, description="Processing runs"):
-      grid_configs = {key: run.config[key] for key in grid_fields}
+      grid_configs = {key: __preprocess_value(run.config[key]) for key in grid_fields}
       row = {**grid_configs, **run.summary}
       if get_all_steps:
-        history = run.history()
-        all_step_metrics = {
-          k: history[k].tolist() for k in metric_fields if k in history.columns
-        }
-        row = {**row, **all_step_metrics}
+          history = run.history(samples=None)
+
+          all_step_metrics = {}
+          for k in metric_fields:
+              if k not in history.columns:
+                  continue
+
+              s = history[k].dropna()          # drops both None and NaN
+              if s.empty:
+                  continue                     # IMPORTANT: don't store useless [] (or [None,...])
+
+              all_step_metrics[k] = s.tolist()
+
+          row.update(all_step_metrics)
       data.append(row)
 
-    df = pd.DataFrame(data)
-    df.set_index(grid_fields, inplace=True)
-    
+    try:
+      df = pd.DataFrame(data)
+      df.set_index(grid_fields, inplace=True)
+    except:
+      list_cols = [
+          c for c in df.columns
+          if df[c].dropna().apply(lambda x: isinstance(x, list)).any()
+      ]
+
+      print(df[list_cols].head())
+      
+      list_grid_fields = [
+          c for c in grid_fields
+          if df[c].dropna().apply(lambda x: isinstance(x, list)).any()
+      ]
+
+      print(df[list_grid_fields].head())
+      
+      raise
+      
     return cls(
       df,
       static_configs,

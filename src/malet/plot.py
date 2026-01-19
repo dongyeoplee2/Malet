@@ -22,14 +22,42 @@ from rich.progress import Progress
 from rich.status import Status
 
 from .plot_utils.data_processor import avgbest_df, select_df, homogenize_df
-from .plot_utils.plot_drawer import ax_draw_curve, ax_draw_best_stared_curve, ax_draw_bar, ax_draw_heatmap, ax_draw_scatter, ax_draw_scatter_heat
+from .plot_utils.plot_drawer import (
+    ax_draw_curve,
+    ax_draw_best_stared_curve,
+    ax_draw_bar,
+    ax_draw_heatmap,
+    ax_draw_scatter,
+    ax_draw_scatter_heat
+)
 from .plot_utils.utils import merge_dict, default_style, ax_styler, create_dir
 
 FLAGS = flags.FLAGS
 
 
 def get_plot_config(plot_config: dict, plot_args: dict):
-    assert plot_args['mode'] in plot_config, f'Mode: {plot_args["mode"]} does not exist.'
+    """Retrieve and merge the plot configuration based on the provided mode and
+    arguments.
+    
+    Args:
+        plot_config (dict): A dictionary containing configuration settings for
+            different plot modes. It should include a 'default_style' key for
+            default configurations.
+        plot_args (dict): A dictionary containing arguments for the plot,
+            including a 'mode' key that specifies the desired plot mode.
+    
+    Returns:
+        dict: A merged dictionary containing the final plot configuration.
+        
+    Notes:
+        - If the mode in `plot_args` does not contain a hyphen ('-'), it is treated as an alias mode.
+          In this case, the function retrieves the base configuration for the alias mode, merges it
+          with `plot_args` and the default style, and then merges it with the alias-specific configuration.
+        - If the mode contains a hyphen, the function directly merges `plot_args` with the mode-specific
+          configuration.
+    """
+    assert plot_args['mode'] in plot_config, \
+        f'Mode: {plot_args["mode"]} does not exist.'
     alias_mode = ('-' not in plot_args['mode'])
     
     p_cfg = plot_config[plot_args['mode']]
@@ -45,10 +73,18 @@ def __save_name_builder(pflt, pmlf, pcrf, pcfg, pani, save_name=''):
     sn = []
     if pmlf: sn.append(f"mlf({'-'.join(pmlf)})")
     if pcrf: sn.append(f"crf({'-'.join(pcrf)})")
-    if pflt: sn.append(f"flt({'-'.join(['_'.join([k, *v]) for k, v in pflt.items()])})")
+    if pflt:
+        sn.append(
+            f"flt({'-'.join(['_'.join([k, *v]) for k, v in pflt.items()])})"
+        )
     if pani: sn.append(f"ani({pani})")
-    if any([pcfg[f'best_ref_{k}'] for k in ['x_fields', 'metric_field', 'ml_fields']]):
-        sn.append(f"bref({pcfg['best_ref_x_fields']}, {pcfg['best_ref_metric_field']}, {pcfg['best_ref_ml_fields']})")
+    fields = ['x_fields', 'metric_field', 'ml_fields']
+    if any([pcfg[f'best_ref_{k}'] for k in fields]):
+        sn.append(
+            f"bref({pcfg['best_ref_x_fields']}, "
+            f"{pcfg['best_ref_metric_field']}, "
+            f"{pcfg['best_ref_ml_fields']})"
+        )
     sn.append("max" if pcfg['best_at_max'] else "-min")
     return save_name + '-'.join(sn)
 
@@ -375,7 +411,7 @@ def draw_metric(tsv_file, plot_config, save_name='', preprcs_df=lambda *x: x):
                     for ri, row_v in enumerate(row_vs[::-1]):
                         ax = axs[ri, ci]
                         
-                        for mlvs, st in zip(mlines, styles):
+                        for mlvs, st in zip(mlines, styles[::-1]):
                             try:
                                 p_df = select_df(best_df, {k: v for k, v in zip([*pmlf, *pcrfn, pani], [*mlvs, col_v, row_v, aniv]) if k}, *x_fields)
                             except: # for log with incomplete grid
@@ -467,11 +503,17 @@ def draw_metric(tsv_file, plot_config, save_name='', preprcs_df=lambda *x: x):
             extra = {'linewidth': 0} if s=='marker' else {}
                 
             vs = sorted(set(df.index.get_level_values(k)))
-            vs = [v.replace('_', ' ').capitalize() if isinstance(v, str) else v for v in vs]
-            legendlines += [lines.Line2D([], [], alpha=0)] + \
-                        [lines.Line2D([], [], **{**pcfg['line_style'], **base_styles, **first_styles, **extra, **{s: ss}}) for ss in [*style_dict[s]][:len(vs)]] + \
+            vs = [v.replace('_', ' ').upper() if isinstance(v, str) else v for v in vs][1]
+            legendlines += [lines.Line2D([], [], **{**pcfg['line_style'], **base_styles, **first_styles, **extra, **{s: ss}}) for ss in [*style_dict[s]][:len(vs)]][:2][::-1] + \
                         ([lines.Line2D([], [], alpha=0) for _ in range(max_row-len(vs))] if is_wide else [])
-            legendlabels += [f"[{k.replace('_', ' ').capitalize()}]", *vs] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
+            # legendlabels += [*vs] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
+            legendlabels += ['SAM$_{(200e)}$', 'SGD$_{(400e)}$'] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
+            # legendlabels += ['SAM$_{(200e)}$-SGD$_{(400e)}$'] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
+            # vs = [v.replace('_', ' ').capitalize() if isinstance(v, str) else v for v in vs]
+            # legendlines += [lines.Line2D([], [], alpha=0)] + \
+            #             [lines.Line2D([], [], **{**pcfg['line_style'], **base_styles, **first_styles, **extra, **{s: ss}}) for ss in [*style_dict[s]][:len(vs)]] + \
+            #             ([lines.Line2D([], [], alpha=0) for _ in range(max_row-len(vs))] if is_wide else [])
+            # legendlabels += [f"[{k.replace('_', ' ').capitalize()}]", *vs] + (['' for _ in range(max_row-len(vs))] if is_wide else [])
         
         ax.legend(handles=legendlines, labels=legendlabels, **legend_style, #**pcfg['ax_style'].pop('legend', [{}])[0], 
                     ncol=len(pmlf) if is_wide else 1, columnspacing=0.8, handlelength=None if len(pmlf)==1 else 1.5)
