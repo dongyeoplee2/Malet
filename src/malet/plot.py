@@ -206,7 +206,7 @@ def draw_metric(tsv_file, plot_config, save_name='', preprcs_df=lambda *x: x):
             avg_field = optimized_field = set()
         else:
             key_field       = {*x_fields, *pmlf, *pcrf, *pani.split(), 'metric'} - specified_field
-            avg_field       = {'seed'} - specified_field - key_field
+            avg_field       = ({'seed'} if 'seed' in df.index.names else set()) - specified_field - key_field
             optimized_field = {*df.index.names} - specified_field - key_field - avg_field
             
         # Report selected plot configs and field handling statistics
