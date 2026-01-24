@@ -336,7 +336,7 @@ class ExperimentLog:
     def __safe_sorted(l):
       try:
         return sorted(l)
-      except TypeError:
+      except:
         return l
     return {k: __safe_sorted(set(self.df.index.get_level_values(k)))
             for k in self.grid_fields}
@@ -628,7 +628,7 @@ class ExperimentLog:
     df = df.drop(['id'], axis=1)
     
     if parse_str:
-        df = df.applymap(str2value)
+        df = df.map(str2value)
         
     # set grid_fields to multiindex
     df = df.set_index(idx[1:])
@@ -1203,7 +1203,7 @@ class ExperimentLog:
         if isinstance(x, list):
           return list2tuple(x)
         return None
-    duplicates = duplicates.applymap(__process_unhashable)
+    duplicates = duplicates.map(__process_unhashable)
     
     # separate trivial duplicates (same metric fields) and conflict duplicates
     trivial_dups = duplicates.duplicated(keep=False)
@@ -1286,7 +1286,7 @@ class ExperimentLog:
         non_duplicates.loc[idx, :] = list(duplicate_group.iloc[0])
         
     # Update the DataFrame to remove resolved duplicates
-    non_duplicates = non_duplicates.applymap(
+    non_duplicates = non_duplicates.map(
       lambda x: list(x) if isinstance(x, tuple) else x
     )
     print(
