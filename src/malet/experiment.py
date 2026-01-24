@@ -333,7 +333,12 @@ class ExperimentLog:
     Returns:
         dict: Dictionary of all values for each index field in the log.
     """
-    return {k: sorted(set(self.df.index.get_level_values(k)))
+    def __safe_sorted(l):
+      try:
+        return sorted(l)
+      except TypeError:
+        return l
+    return {k: __safe_sorted(set(self.df.index.get_level_values(k)))
             for k in self.grid_fields}
   
   # Constructors.
