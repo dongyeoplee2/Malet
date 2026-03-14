@@ -1,0 +1,9 @@
+model: ResNet18
+dataset: cifar10
+num_epochs: 20
+batch_size: 128
+
+grid:
+    seed: [1, 2, 3]
+    lr: [0.001, 0.01, 0.1]
+    optimizer: [sgd, adam]
