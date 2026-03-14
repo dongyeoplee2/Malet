@@ -27,11 +27,11 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-    'absl-py==1.0.0',
+    'absl-py>=1.0.0',
     'gitpython',
     'pandas',
     'matplotlib',
-    'ml-collections==0.1.0',
+    'ml-collections>=0.1.0',
     'numpy',
     'rich',
     'seaborn',
@@ -42,4 +42,85 @@ malet-plot = "malet.plot:main"
 malet-merge = "malet.merge_log:main"
 
 [project.urls]
-Repository = "https://github.com/edong6768/Malet.git"
+Repository = "https://github.com/dongyeoplee2/Malet.git"
+Documentation = "https://dongyeoplee2.github.io/Malet/"
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "pytest",
+    "wandb",
+]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-book-theme",
+    "myst-parser",
+    "sphinx-autoapi",
+    "sphinx-copybutton",
+    "sphinx-design",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "figures: tests that generate example figures for documentation",
+]
+
+[tool.ruff]
+target-version = "py38"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "D",    # pydocstyle
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "D100",   # missing docstring in public module
+    "D101",   # missing docstring in public class
+    "D102",   # missing docstring in public method
+    "D103",   # missing docstring in public function
+    "D104",   # missing docstring in public package
+    "D105",   # missing docstring in magic method
+    "D107",   # missing docstring in __init__
+    "D200",   # unnecessary multiline docstring
+    "D203",   # one-blank-line-before-class (conflicts with D211)
+    "D205",   # blank line required between summary and description
+    "D213",   # multi-line-summary-second-line (conflicts with D212)
+    "D415",   # first line should end with punctuation
+    "D417",   # missing argument description in docstring
+    "E501",   # line too long (handled by formatter)
+    "E701",   # multiple statements on one line
+    "E711",   # comparison to None
+    "E721",   # type comparison
+    "E722",   # bare except
+    "E731",   # lambda assignment
+    "E741",   # ambiguous variable name
+    "B006",   # mutable argument default
+    "B023",   # function uses loop variable
+    "B034",   # re.sub positional args
+    "B904",   # raise without from in except
+    "B905",   # zip-without-explicit-strict (py3.10+)
+    "N805",   # invalid first argument name for method
+    "RUF005", # collection literal concatenation
+    "RUF015", # unnecessary iterable allocation for first element
+    "RUF017", # quadratic list summation
+    "RUF018", # assignment in assert
+    "RUF059", # unused unpacked variable
+    "SIM105", # suppressible exception
+    "SIM108", # if-else instead of ternary
+    "UP006",  # non-pep585-annotation (need py3.8 compat)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
