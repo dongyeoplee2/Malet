@@ -1,8 +1,6 @@
-
 from __future__ import annotations
 
-from typing import (Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple,
-                    Union)
+from typing import Any, Dict, Iterable, List, Sequence, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -27,9 +25,7 @@ def _ensure_index_levels(df: pd.DataFrame, keys: Iterable[str]) -> None:
 
 
 def _subindex_on_levels(index: pd.MultiIndex, keep_levels: Sequence[str]) -> pd.MultiIndex:
-    """
-    Return a MultiIndex containing only keep_levels, in that order.
-    """
+    """Return a MultiIndex containing only keep_levels, in that order."""
     drop_levels = [lvl for lvl in index.names if lvl not in set(keep_levels)]
     sub_idx = index.droplevel(drop_levels) if drop_levels else index
     if list(sub_idx.names) != list(keep_levels):
@@ -45,8 +41,7 @@ def select_df(
     drop: bool = False,
     validate: bool = True,
 ) -> pd.DataFrame:
-    """
-    Select df rows with matching values from ``filt_dict`` except ``exclude_fields``.
+    """Select df rows with matching values from ``filt_dict`` except ``exclude_fields``.
 
     This is a vectorized, single-pass version of the original implementation.
 
@@ -73,12 +68,13 @@ def select_df(
         pandas.DataFrame: Filtered DataFrame.
     """
     assert not df.empty, "Given dataframe is empty."
-    if not filt_dict: return df
+    if not filt_dict:
+        return df
 
     if validate:
         _ensure_index_levels(df, filt_dict.keys())
 
-    filt_keys = [k for k in filt_dict.keys() if k not in set(exclude_fields)]
+    filt_keys = [k for k in filt_dict if k not in set(exclude_fields)]
 
     idx = df.index
     mask = np.ones(len(df), dtype=bool)
@@ -96,9 +92,7 @@ def select_df(
 
         if validate and not mask.any():
             partial = {kk: filt_dict[kk] for kk in filt_keys[: i + 1]}
-            raise AssertionError(
-                f"Filter {k}:{values} return empty dataframe. Inspect {partial}"
-            )
+            raise AssertionError(f"Filter {k}:{values} return empty dataframe. Inspect {partial}")
 
     out = df.loc[mask]
 
@@ -115,8 +109,7 @@ def homogenize_df(
     *exclude_fields: str,
     validate: bool = True,
 ) -> pd.DataFrame:
-    """
-    Homogenize index values of ``df`` with reference to ``select_df(ref_df, filt_dict)``.
+    """Homogenize index values of ``df`` with reference to ``select_df(ref_df, filt_dict)``.
 
     Original intent (unchanged):
     - Align ``df`` so that its remaining index grid matches the grid induced by
@@ -141,7 +134,7 @@ def homogenize_df(
     Returns:
         pandas.DataFrame: Homogenized DataFrame.
     """
-    ref_idx = select_df(ref_df ,filt_dict, *exclude_fields, drop=True, validate=validate).index
+    ref_idx = select_df(ref_df, filt_dict, *exclude_fields, drop=True, validate=validate).index
 
     if len(ref_idx) == 0:
         return df.iloc[0:0]
@@ -161,8 +154,7 @@ def avgbest_df(
     best_at_max: bool = True,
     validate: bool = True,
 ) -> pd.DataFrame:
-    """
-    Average over ``avg_over`` and get best result over ``best_over``.
+    """Average over ``avg_over`` and get best result over ``best_over``.
 
     Original semantics preserved:
     - ``avg_over``: aggregate (mean + SEM) over these index levels.
