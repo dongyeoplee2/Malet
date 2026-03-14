@@ -10,8 +10,21 @@ Each release is published on [GitHub Releases](https://github.com/dongyeoplee2/M
 
 #### 2026
 
+**✨ Added**
+
+- GitHub Actions workflow for automatic docs deployment to GitHub Pages
+- auto-generated changelog from git tags and commit messages
+- plot figures for documentation gallery and guides
+- documentation pages for getting started, plotting guides, and advanced topics
+- Sphinx docs infrastructure with sphinx-book-theme
+- test suite for ExperimentLog, ConfigIter, and plot figure generation
+- continuous colormap for numeric multi-line fields and docstrings to plot modules
+- Google-style docstrings and refactor core modules
+
 **🚀 Changed**
 
+- slim down README and link to full documentation
+- migrate build config to uv and update `pyproject.toml`
 - minor refactoring and prior ad hoc patch
 
 **🩹 Fixed**
