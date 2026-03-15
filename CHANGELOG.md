@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). This project currently uses **effort-based versioning** (minor bumps reflect scope of changes) and will migrate to [Semantic Versioning](https://semver.org/) once the API stabilizes.
 
-## [Unreleased]
+## [0.2.2] - 2026-03-15
 
 ### Added
 
