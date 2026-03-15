@@ -10,7 +10,10 @@
 
 **[Full Documentation](https://dongyeoplee2.github.io/Malet/)** | **[Changelog](CHANGELOG.md)**
 
-**Malet** (**Ma**chine **L**earning **E**xperiment **T**ool) is a tool for hyperparameter grid searches, metric logging, advanced analyses and visualizations.
+**Malet** (short for **Ma**chine **L**earning **E**xperiment **T**ool) is a tool for hyperparameter grid searches, metric logging, advanced analyses and visualizations.
+This is a pet project I'm developing for personal research, and it is yet embarrassingly incomplete.
+Kinda having fun with the cosmetics and documentations.
+Don't really know where this is going:)
 
 ## Gallery
 
