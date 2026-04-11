@@ -159,51 +159,74 @@ def normalize_tag(tag: str) -> str:
     return tag
 
 
-def render(tags: list[tuple[str, str]]) -> str:
+def render(tags: list[tuple[str, str]], *, plain: bool = False) -> str:
     lines: list[str] = []
 
-    lines.append("# Changelog\n")
-    lines.append(
-        "Malet currently uses [**Effort-based Versioning (EffVer)**]"
-        "(https://jacobtomlinson.dev/effver/): "
-        "minor bumps reflect the scope of changes rather than strict API "
-        "compatibility guarantees. "
-        "We plan to migrate to [Semantic Versioning](https://semver.org/) "
-        "once the API stabilises.\n"
-    )
-    lines.append(
-        "Each release is published on "
-        f"[GitHub Releases]({REPO_URL}/releases) "
-        "with downloadable assets and full commit diffs.\n"
-    )
-    lines.append("---\n")
+    if plain:
+        lines.append("# Changelog\n")
+        lines.append(
+            "All notable changes to this project will be documented in this file.\n"
+        )
+        lines.append(
+            "The format follows [Keep a Changelog](https://keepachangelog.com/). "
+            "This project currently uses **effort-based versioning** "
+            "(minor bumps reflect scope of changes) and will migrate to "
+            "[Semantic Versioning](https://semver.org/) once the API stabilizes.\n"
+        )
+    else:
+        lines.append("# Changelog\n")
+        lines.append(
+            "Malet currently uses [**Effort-based Versioning (EffVer)**]"
+            "(https://jacobtomlinson.dev/effver/): "
+            "minor bumps reflect the scope of changes rather than strict API "
+            "compatibility guarantees. "
+            "We plan to migrate to [Semantic Versioning](https://semver.org/) "
+            "once the API stabilises.\n"
+        )
+        lines.append(
+            "Each release is published on "
+            f"[GitHub Releases]({REPO_URL}/releases) "
+            "with downloadable assets and full commit diffs.\n"
+        )
+        lines.append("---\n")
 
     # --- Unreleased ---------------------------------------------------------
     latest_tag = tags[0][0] if tags else None
     dated = dated_commits_between(latest_tag, "HEAD")
 
     if dated:
-        # Group by year-month, preserving order (newest-first)
         from collections import OrderedDict
         months: OrderedDict[str, list[str]] = OrderedDict()
         for ym, msg in dated:
             months.setdefault(ym, []).append(msg)
 
-        lines.append("## Unreleased\n")
-        for ym, msgs in months.items():
-            sections = classify(msgs)
-            if not any(sections.values()):
-                continue
-            lines.append(f"#### {ym}\n")
+        if plain:
+            lines.append("## [Unreleased]\n")
+            all_msgs = [m for ms in months.values() for m in ms]
+            sections = classify(all_msgs)
             for header in PREFIX_ORDER:
                 items = sections[header]
                 if items:
-                    emoji = SECTION_EMOJI.get(header, "")
-                    lines.append(f"**{emoji} {header}**\n")
+                    lines.append(f"### {header}\n")
                     for item in items:
                         lines.append(f"- {item}")
                     lines.append("")
-        lines.append("---\n")
+        else:
+            lines.append("## Unreleased\n")
+            for ym, msgs in months.items():
+                sections = classify(msgs)
+                if not any(sections.values()):
+                    continue
+                lines.append(f"#### {ym}\n")
+                for header in PREFIX_ORDER:
+                    items = sections[header]
+                    if items:
+                        emoji = SECTION_EMOJI.get(header, "")
+                        lines.append(f"**{emoji} {header}**\n")
+                        for item in items:
+                            lines.append(f"- {item}")
+                        lines.append("")
+            lines.append("---\n")
 
     # --- Tagged releases ----------------------------------------------------
     for i, (tag, date) in enumerate(tags):
@@ -213,7 +236,10 @@ def render(tags: list[tuple[str, str]]) -> str:
         msgs = commits_between(older_tag, tag)
         sections = classify(msgs)
 
-        heading = f"## [{version}]({REPO_URL}/releases/tag/{tag}) — {date}\n"
+        if plain:
+            heading = f"## [{version}] - {date}\n"
+        else:
+            heading = f"## [{version}]({REPO_URL}/releases/tag/{tag}) — {date}\n"
         lines.append(heading)
 
         has_content = False
@@ -221,8 +247,11 @@ def render(tags: list[tuple[str, str]]) -> str:
             items = sections[header]
             if items:
                 has_content = True
-                emoji = SECTION_EMOJI.get(header, "")
-                lines.append(f"### {emoji} {header}\n")
+                if plain:
+                    lines.append(f"### {header}\n")
+                else:
+                    emoji = SECTION_EMOJI.get(header, "")
+                    lines.append(f"### {emoji} {header}\n")
                 for item in items:
                     lines.append(f"- {item}")
                 lines.append("")
@@ -230,7 +259,7 @@ def render(tags: list[tuple[str, str]]) -> str:
         if not has_content:
             lines.append("*No categorised changes.*\n")
 
-        if i < len(tags) - 1:
+        if not plain and i < len(tags) - 1:
             lines.append("---\n")
 
     return "\n".join(lines)
@@ -248,10 +277,15 @@ def main() -> None:
         default=None,
         help="Output path (default: docs/changelog.md)",
     )
+    parser.add_argument(
+        "--plain",
+        action="store_true",
+        help="Generate plain format (no emojis, no links) for root CHANGELOG.md",
+    )
     args = parser.parse_args()
 
     tags = get_tags()
-    content = render(tags)
+    content = render(tags, plain=args.plain)
 
     if args.dry_run:
         print(content)

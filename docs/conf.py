@@ -61,6 +61,9 @@ html_theme_options = {
 }
 html_css_files = ["custom.css"]
 
+# Exclude internal planning docs from build
+exclude_patterns = ["MALEP.md", "MALET_NOTES.md"]
+
 # Suppress warnings
 suppress_warnings = [
     "autoapi.python_import_resolution",

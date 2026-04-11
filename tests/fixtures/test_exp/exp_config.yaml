@@ -1,0 +1,14 @@
+# static configs
+model: LeNet5
+dataset: mnist
+
+num_epochs: 100
+batch_size: 128
+optimizer: adam
+
+# grided fields
+grid_fields: [seed, lr, weight_decay]
+grid:
+    seed: [1, 2, 3]
+    lr: [0.0001, 0.001, 0.01, 0.1]
+    weight_decay: [0.0, 0.00005, 0.0001]

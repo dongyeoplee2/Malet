@@ -1,0 +1,43 @@
+name: Update Changelog
+
+on:
+  push:
+    tags:
+      - "malet-v*"
+      - "malt-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history needed for changelog generation
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate docs changelog
+        run: python scripts/generate_changelog.py
+
+      - name: Generate root CHANGELOG.md
+        run: python scripts/generate_changelog.py --plain -o CHANGELOG.md
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md docs/changelog.md
+          if git diff --cached --quiet; then
+            echo "No changelog changes to commit."
+          else
+            git commit -m "Update changelogs for $(git describe --tags --abbrev=0)"
+            git push origin main
+          fi

@@ -28,3 +28,6 @@ docs/api/
 
 # OS
 .DS_Store
+
+# Temporary
+tmp/
