@@ -830,6 +830,9 @@ def ax_draw_iso_step_bezier(
     sort_by: Literal["x", "y", "given"] = "x",
     zorder: int = 4,
     smoothing: Literal["bezier", "straight"] = "bezier",
+    connect_mode: Literal["chain", "knn"] = "chain",
+    knn_k: int = 2,
+    max_segment_frac: float | None = None,
     **_,
 ) -> list:
     """Thin dotted cubic-Bezier curves connecting SAME-step anchor points
@@ -893,6 +896,26 @@ def ax_draw_iso_step_bezier(
         def _step_color(_s):
             return color
 
+    # Compute global (x, y) ranges once for max_segment_frac thresholding
+    all_xs, all_ys = [], []
+    for s, x, y in valid:
+        all_xs.extend(x); all_ys.extend(y)
+    if all_xs:
+        x_rng = float(max(all_xs) - min(all_xs)) or 1.0
+        y_rng = float(max(all_ys) - min(all_ys)) or 1.0
+    else:
+        x_rng = y_rng = 1.0
+    max_len = None
+    if max_segment_frac is not None:
+        max_len = float(max_segment_frac) * ((x_rng ** 2 + y_rng ** 2) ** 0.5)
+
+    def _seg_ok(p0, p1):
+        if max_len is None:
+            return True
+        nx = (p1[0] - p0[0]) / x_rng
+        ny = (p1[1] - p0[1]) / y_rng
+        return (nx * nx + ny * ny) ** 0.5 <= float(max_segment_frac)
+
     artists = []
     for st in at_steps:
         pts = []
@@ -910,26 +933,50 @@ def ax_draw_iso_step_bezier(
         elif sort_by == "y":
             pts.sort(key=lambda p: p[1])
 
-        verts = [pts[0]]
-        codes = [mpath.Path.MOVETO]
-        if smoothing == "straight":
+        # Build list of (p0, p1) edges depending on connect_mode
+        edges = []
+        if connect_mode == "knn":
+            # For each point, connect to its k nearest neighbors by Euclidean
+            # distance in the plot frame (normalized). Deduplicated.
+            seen = set()
+            for i, pi in enumerate(pts):
+                dists = []
+                for j, pj in enumerate(pts):
+                    if i == j: continue
+                    nx = (pj[0] - pi[0]) / x_rng
+                    ny = (pj[1] - pi[1]) / y_rng
+                    dists.append((nx * nx + ny * ny, j))
+                dists.sort()
+                for _d, j in dists[:knn_k]:
+                    key = (min(i, j), max(i, j))
+                    if key in seen: continue
+                    seen.add(key)
+                    edges.append((pts[i], pts[j]))
+        else:  # "chain" — sequential path through sorted points
             for i in range(len(pts) - 1):
-                verts.append(pts[i + 1])
-                codes.append(mpath.Path.LINETO)
-        else:  # bezier — horizontal-tangent cubic between each pair
-            for i in range(len(pts) - 1):
-                (x0, y0), (x1, y1) = pts[i], pts[i + 1]
-                dx = x1 - x0
-                c0 = (x0 + dx / 3.0, y0)
-                c1 = (x1 - dx / 3.0, y1)
-                verts.extend([c0, c1, (x1, y1)])
-                codes.extend([mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4])
-        path = mpath.Path(verts, codes)
-        patch = PathPatch(path, facecolor="none", edgecolor=_step_color(st),
-                          lw=line_width, linestyle=linestyle, alpha=alpha,
-                          zorder=zorder)
-        ax.add_patch(patch)
-        artists.append(patch)
+                edges.append((pts[i], pts[i + 1]))
+
+        # Apply max-segment-length filter
+        edges = [e for e in edges if _seg_ok(*e)]
+        if not edges:
+            continue
+
+        # Render: one PathPatch per edge (keeps short segments independent)
+        for p0, p1 in edges:
+            if smoothing == "straight":
+                verts = [p0, p1]; codes = [mpath.Path.MOVETO, mpath.Path.LINETO]
+            else:
+                dx = p1[0] - p0[0]
+                c0 = (p0[0] + dx / 3.0, p0[1]); c1 = (p1[0] - dx / 3.0, p1[1])
+                verts = [p0, c0, c1, p1]
+                codes = [mpath.Path.MOVETO, mpath.Path.CURVE4,
+                         mpath.Path.CURVE4, mpath.Path.CURVE4]
+            path = mpath.Path(verts, codes)
+            patch = PathPatch(path, facecolor="none", edgecolor=_step_color(st),
+                              lw=line_width, linestyle=linestyle, alpha=alpha,
+                              zorder=zorder)
+            ax.add_patch(patch)
+            artists.append(patch)
 
     return artists
 
