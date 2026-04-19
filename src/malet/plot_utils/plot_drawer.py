@@ -829,6 +829,7 @@ def ax_draw_iso_step_bezier(
     alpha: float = 0.55,
     sort_by: Literal["x", "y", "given"] = "x",
     zorder: int = 4,
+    smoothing: Literal["bezier", "straight"] = "bezier",
     **_,
 ) -> list:
     """Thin dotted cubic-Bezier curves connecting SAME-step anchor points
@@ -911,13 +912,18 @@ def ax_draw_iso_step_bezier(
 
         verts = [pts[0]]
         codes = [mpath.Path.MOVETO]
-        for i in range(len(pts) - 1):
-            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
-            dx = x1 - x0
-            c0 = (x0 + dx / 3.0, y0)
-            c1 = (x1 - dx / 3.0, y1)
-            verts.extend([c0, c1, (x1, y1)])
-            codes.extend([mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4])
+        if smoothing == "straight":
+            for i in range(len(pts) - 1):
+                verts.append(pts[i + 1])
+                codes.append(mpath.Path.LINETO)
+        else:  # bezier — horizontal-tangent cubic between each pair
+            for i in range(len(pts) - 1):
+                (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+                dx = x1 - x0
+                c0 = (x0 + dx / 3.0, y0)
+                c1 = (x1 - dx / 3.0, y1)
+                verts.extend([c0, c1, (x1, y1)])
+                codes.extend([mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4])
         path = mpath.Path(verts, codes)
         patch = PathPatch(path, facecolor="none", edgecolor=_step_color(st),
                           lw=line_width, linestyle=linestyle, alpha=alpha,
