@@ -511,8 +511,8 @@ def ax_draw_scatter_trajectory(
                                       # any other string is passed to scatter
                                       # as marker (e.g. "o", "s", "^").
     end_marker: str = "D",           # filled diamond (geometric, final)
-    start_markersize: int = 90,
-    end_markersize: int = 95,
+    start_markersize: int = 45,
+    end_markersize: int = 45,
     vmin=None,
     vmax=None,
     **_,
@@ -613,15 +613,25 @@ def ax_draw_scatter_trajectory(
     # anchor_at_steps (list of absolute step values) overrides anchor_every
     # for stability under animation — anchors stay pinned to fixed steps
     # across frames instead of re-indexing by sample count.
+    # When show_endpoints is True, the anchors at index 0 and n-1 are
+    # dropped because the start/end markers replace them.
     n = len(xs_s)
     if n > 0:
         step_vals = np.asarray(wide.index.to_list(), dtype=float)
+        idx = None
         if anchor_at_steps is not None and len(list(anchor_at_steps)) > 0:
             anchor_steps_arr = np.asarray(list(anchor_at_steps), dtype=float)
             valid = anchor_steps_arr[(anchor_steps_arr >= step_vals.min())
                                      & (anchor_steps_arr <= step_vals.max())]
             if len(valid) > 0:
                 idx = np.array([int(np.argmin(np.abs(step_vals - s))) for s in valid])
+        elif anchor_every > 0:
+            idx = np.linspace(0, n - 1, num=min(anchor_every, n)).astype(int)
+
+        if idx is not None and len(idx) > 0:
+            if show_endpoints:
+                idx = idx[(idx != 0) & (idx != n - 1)]
+            if len(idx) > 0:
                 artists.append(
                     ax.scatter(
                         xs_s[idx], ys_s[idx],
@@ -630,16 +640,6 @@ def ax_draw_scatter_trajectory(
                         linewidths=0.8, zorder=6,
                     )
                 )
-        elif anchor_every > 0:
-            idx = np.linspace(0, n - 1, num=min(anchor_every, n)).astype(int)
-            artists.append(
-                ax.scatter(
-                    xs_s[idx], ys_s[idx],
-                    s=40, marker="o",
-                    facecolor="white", edgecolor="black",
-                    linewidths=0.8, zorder=6,
-                )
-            )
 
     # Start + end endpoint markers.
     # Start: triangle rotated to match the initial curve tangent direction
