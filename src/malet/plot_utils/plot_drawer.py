@@ -1008,7 +1008,7 @@ def ax_draw_endpoint_labels(
     fontsize: int = 9,
     x_offset_px: int = 10,
     y_offset_px: int = 12,
-    y_cluster_frac: float = 0.06,
+    min_gap_px: float | None = None,
     zorder: int = 7,
     bbox_pad: float = 0.22,
     bbox_alpha: float = 0.95,
@@ -1018,18 +1018,28 @@ def ax_draw_endpoint_labels(
     connector_lw: float = 0.5,
     **_,
 ) -> list:
-    """Draw per-curve endpoint labels with automatic y-stagger to avoid overlap.
+    """Draw per-curve endpoint labels with pixel-space overlap deconfliction.
+
+    Algorithm:
+      1. Compute each anchor's pixel position via ``ax.transData``.
+      2. Each label's initial target pixel y = anchor_y + ``y_offset_px``.
+      3. Sort labels by target y; single pass from bottom to top that pushes
+         each label up to ensure ``min_gap_px`` vertical separation from the
+         one below. This is the standard 1D deconflict algorithm — provably
+         gives the minimum total upward displacement.
+      4. Render each label at its adjusted pixel offset using
+         ``textcoords='offset pixels'`` + a thin connector arrow when the
+         offset differs from the default.
 
     Args:
-        points: iterable of ``(x, y, text)`` or ``(x, y, text, edge_color)``
-            tuples — one per trajectory endpoint.
-        y_cluster_frac: two endpoints are considered to collide when their
-            y-distance is less than this fraction of the overall y-range.
-            Colliding entries get alternating vertical offsets.
-        connector: when True, adds a thin line from the callout back to the
-            data point for non-default offsets (visual cue of which curve).
+        points: iterable of ``(x, y, text)`` or ``(x, y, text, edge_color)``.
+        min_gap_px: minimum vertical gap between label bboxes in pixels.
+            Defaults to ~1.6 × fontsize (matches matplotlib line height).
+        connector: draw a thin connecting arrow for any label whose y-offset
+            was pushed beyond the default (useful when the box is far from
+            its data anchor).
 
-    Returns list of matplotlib artists.
+    Returns a list of matplotlib artists.
     """
     pts = []
     for p in points:
@@ -1039,36 +1049,52 @@ def ax_draw_endpoint_labels(
             x, y, text = p
             ec = "0.5"
         else:
-            raise ValueError(f"point must be (x, y, text) or (x, y, text, color); got {p!r}")
+            raise ValueError(
+                f"point must be (x, y, text) or (x, y, text, color); got {p!r}"
+            )
         pts.append((float(x), float(y), str(text), ec))
     if not pts:
         return []
 
-    y_vals = [p[1] for p in pts]
-    y_rng = max(y_vals) - min(y_vals) or 1.0
-    pts.sort(key=lambda p: p[1])  # ascending y
+    # Label-height estimate in pixels from fontsize (1 pt = dpi/72 px)
+    if min_gap_px is None:
+        min_gap_px = fontsize * 1.6 * ax.figure.dpi / 72.0
 
+    # 1. Anchor pixel positions
+    anchors_px = [ax.transData.transform((x, y)) for (x, y, _, _) in pts]
+    # 2. Initial target pixel y
+    targets = [
+        (i, anchors_px[i][0], anchors_px[i][1] + y_offset_px * ax.figure.dpi / 72.0)
+        for i in range(len(pts))
+    ]
+    # 3. Sort by target y and deconflict (push up to ensure min_gap_px)
+    targets.sort(key=lambda t: t[2])
+    for k in range(1, len(targets)):
+        idx, ax_px, y_target = targets[k]
+        prev_y = targets[k - 1][2]
+        if y_target - prev_y < min_gap_px:
+            targets[k] = (idx, ax_px, prev_y + min_gap_px)
+
+    # Map idx → adjusted pixel y
+    adj_y = {i: y for (i, _, y) in targets}
+
+    # 4. Draw each label at its adjusted offset
     artists = []
-    prev_y = None
-    cluster_idx = 0
-    for (x, y, text, ec) in pts:
-        if prev_y is not None and abs(y - prev_y) < y_cluster_frac * y_rng:
-            cluster_idx += 1
-        else:
-            cluster_idx = 0
-        prev_y = y
-        # Alternating vertical offsets: 0, +dy, -dy, +2dy, -2dy, ...
-        level = (cluster_idx + 1) // 2
-        sign = 1 if cluster_idx % 2 == 0 else -1
-        dy = (level + 1) * y_offset_px * sign if cluster_idx > 0 else y_offset_px
+    default_pt = y_offset_px
+    for i, (x, y, text, ec) in enumerate(pts):
+        anchor_px_y = anchors_px[i][1]
+        delta_px = adj_y[i] - anchor_px_y  # pixel-space offset from anchor
+        dy_pt = delta_px * 72.0 / ax.figure.dpi
         kwargs = dict(
-            xytext=(x_offset_px, dy), textcoords="offset points",
+            xytext=(x_offset_px, dy_pt), textcoords="offset points",
             fontsize=fontsize, color="0.1",
             bbox=dict(boxstyle=f"round,pad={bbox_pad}", fc="white",
                       ec=ec, lw=edge_lw, alpha=bbox_alpha),
             zorder=zorder,
         )
-        if connector and cluster_idx > 0:
+        # Draw a connector arrow whenever the offset was nudged meaningfully
+        # from the default position (> 2 points).
+        if connector and abs(dy_pt - default_pt) > 2.0:
             kwargs["arrowprops"] = dict(
                 arrowstyle="-", color=connector_color, lw=connector_lw,
             )
