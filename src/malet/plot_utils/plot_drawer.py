@@ -1036,7 +1036,9 @@ def ax_draw_endpoint_labels(
     fontsize: int = 9,
     x_offset_px: int = 10,
     y_offset_px: int = 12,
+    below_y_offset_px: int = -14,  # used when label can't fit to the right
     min_gap_px: float | None = None,
+    auto_below_margin_px: int = 8,  # how close to right edge triggers below
     zorder: int = 12,              # above trajectory + endpoint markers
     bbox_pad: float = 0.22,
     bbox_alpha: float = 1.0,       # fully opaque — blocks curves underneath
@@ -1085,44 +1087,79 @@ def ax_draw_endpoint_labels(
         return []
 
     # Label-height estimate in pixels from fontsize (1 pt = dpi/72 px)
+    dpi = ax.figure.dpi
     if min_gap_px is None:
-        min_gap_px = fontsize * 1.6 * ax.figure.dpi / 72.0
+        min_gap_px = fontsize * 1.6 * dpi / 72.0
 
     # 1. Anchor pixel positions
     anchors_px = [ax.transData.transform((x, y)) for (x, y, _, _) in pts]
-    # 2. Initial target pixel y
-    targets = [
-        (i, anchors_px[i][0], anchors_px[i][1] + y_offset_px * ax.figure.dpi / 72.0)
-        for i in range(len(pts))
-    ]
-    # 3. Sort by target y and deconflict (push up to ensure min_gap_px)
-    targets.sort(key=lambda t: t[2])
-    for k in range(1, len(targets)):
-        idx, ax_px, y_target = targets[k]
-        prev_y = targets[k - 1][2]
-        if y_target - prev_y < min_gap_px:
-            targets[k] = (idx, ax_px, prev_y + min_gap_px)
+    # Plot area right edge in pixels (for right/below placement decision)
+    bbox = ax.get_window_extent()
+    right_edge_px = bbox.x1
 
-    # Map idx → adjusted pixel y
-    adj_y = {i: y for (i, _, y) in targets}
+    # Estimate label width per-point in pixels. 0.55 is a conservative
+    # average character-width-to-fontsize ratio for common fonts.
+    def _label_w_px(text):
+        return max(1, len(text)) * fontsize * 0.55 * dpi / 72.0 + 2 * bbox_pad * fontsize * dpi / 72.0
 
-    # 4. Draw each label at its adjusted offset
+    # 2. Decide placement side per anchor:
+    #    - right (preferred): label to the right of anchor, same y
+    #    - below: when there's no horizontal room, drop below anchor
+    placements = []  # list of (idx, x_anchor_px, target_y_px, side)
+    for i, (ax_px, ay_px) in enumerate(anchors_px):
+        text = pts[i][2]
+        right_needed = ax_px + x_offset_px * dpi / 72.0 + _label_w_px(text) + auto_below_margin_px
+        if right_needed > right_edge_px:
+            side = "below"
+            target_y = ay_px + below_y_offset_px * dpi / 72.0
+        else:
+            side = "right"
+            target_y = ay_px + y_offset_px * dpi / 72.0
+        placements.append((i, ax_px, target_y, side))
+
+    # 3. Deconflict within each side (1D y-stagger; different sides don't
+    #    typically collide since they sit on different sides of the anchor)
+    for target_side in ("right", "below"):
+        side_group = [t for t in placements if t[3] == target_side]
+        side_group.sort(key=lambda t: t[2])
+        for k in range(1, len(side_group)):
+            idx, ax_px, y_t, side = side_group[k]
+            prev_y = side_group[k - 1][2]
+            if y_t - prev_y < min_gap_px:
+                side_group[k] = (idx, ax_px, prev_y + min_gap_px, side)
+        for adjusted in side_group:
+            # Replace in the parent list (find by idx)
+            for j, orig in enumerate(placements):
+                if orig[0] == adjusted[0]:
+                    placements[j] = adjusted
+                    break
+
+    # 4. Draw each label at its resolved offset
     artists = []
-    default_pt = y_offset_px
     for i, (x, y, text, ec) in enumerate(pts):
-        anchor_px_y = anchors_px[i][1]
-        delta_px = adj_y[i] - anchor_px_y  # pixel-space offset from anchor
-        dy_pt = delta_px * 72.0 / ax.figure.dpi
+        idx, ax_px, target_y_px, side = next(p for p in placements if p[0] == i)
+        anchor_py = anchors_px[i][1]
+        delta_px = target_y_px - anchor_py
+        dy_pt = delta_px * 72.0 / dpi
+
+        if side == "right":
+            x_pt = x_offset_px
+            default_y_pt = y_offset_px
+        else:
+            x_pt = 0
+            default_y_pt = below_y_offset_px
+
         kwargs = dict(
-            xytext=(x_offset_px, dy_pt), textcoords="offset points",
+            xytext=(x_pt, dy_pt), textcoords="offset points",
             fontsize=fontsize, color="0.1",
             bbox=dict(boxstyle=f"round,pad={bbox_pad}", fc="white",
                       ec=ec, lw=edge_lw, alpha=bbox_alpha),
             zorder=zorder,
+            ha="center" if side == "below" else "left",
+            va="top" if side == "below" else "center",
         )
-        # Draw a connector arrow whenever the offset was nudged meaningfully
-        # from the default position (> 2 points).
-        if connector and abs(dy_pt - default_pt) > 2.0:
+        # Draw connector for meaningfully-offset labels
+        if connector and abs(dy_pt - default_y_pt) > 2.0:
             kwargs["arrowprops"] = dict(
                 arrowstyle="-", color=connector_color, lw=connector_lw,
             )
