@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/). This project currently uses **effort-based versioning** (minor bumps reflect scope of changes) and will migrate to [Semantic Versioning](https://semver.org/) once the API stabilizes.
 
+## Unreleased
+
+### Added
+
+- New plot drawers and `malet-plot` modes:
+  - `ax_draw_scatter_trajectory` / `mode=scatter_trajectory` — 2-metric
+    2D path with step as implicit curve parameter (scaling-law Fig 4
+    visual: EMA-smoothed dark-stroked curve + raw-scatter underlay +
+    sparse white-fill anchor markers)
+  - `ax_draw_scatter_paired` / `mode=scatter_paired` — paired A/B points
+    connected by a dark-edged colored line, shared outcome colorbar,
+    white-fill markers with thin dark edge; binary `pair_field` picked
+    from the first `pmlf`
+  - `ax_draw_surface_3d` / `mode=surface_3d` — 3D surface from two
+    `x_fields` × one metric (`plot.py` adds `subplot_kw={'projection':'3d'}`
+    when this mode is selected)
+  - `ax_draw_parallel_coords` / `mode=parallel_coords` — wandb-style
+    parallel coordinates joined by cubic Bezier curves; handles numeric
+    and categorical axes; colored by the last field
+
 ## [0.2.2] - 2026-03-15
 
 ### Added

@@ -63,6 +63,31 @@ malet-plot -exp_folder ./experiments/resnet_cifar10 \
     -mode heatmap-lr\ optimizer-val_accuracy \
     -filter 'step last' \
     -best_at_max
+
+# Scaling-law-style 2D trajectory — each run traces a path through
+# (metric_x × metric_y) space as step advances
+malet-plot -exp_folder ./experiments/resnet_cifar10 \
+    -mode 'scatter_trajectory--train_loss val_loss' \
+    -multi_line_fields 'seed' \
+    -best_at_max
+
+# Paired A/B scatter — two points per config connected by a colored line,
+# one pair member per value of the first multi_line_field
+malet-plot -exp_folder ./experiments/resnet_cifar10 \
+    -mode 'scatter_paired--val_loss val_accuracy' \
+    -multi_line_fields 'lr_compensation' \
+    -filter 'step last'
+
+# 3D surface from two x_fields to one metric
+malet-plot -exp_folder ./experiments/resnet_cifar10 \
+    -mode 'surface_3d-lr\ epoch-val_accuracy' \
+    -filter 'seed 1'
+
+# Wandb-style parallel coordinates with cubic-Bezier curves between axes,
+# colored by the rightmost field (the metric)
+malet-plot -exp_folder ./experiments/resnet_cifar10 \
+    -mode 'parallel_coords-lr\ optimizer\ seed-val_accuracy' \
+    -filter 'step last'
 ```
 
 ---

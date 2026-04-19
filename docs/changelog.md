@@ -12,6 +12,22 @@ Each release is published on [GitHub Releases](https://github.com/dongyeoplee2/M
 
 **✨ Added**
 
+- four new plot drawers (and `malet-plot` modes) in `plot_utils.plot_drawer`:
+  - `ax_draw_scatter_trajectory` / `mode=scatter_trajectory` — 2-metric 2D
+    path with `step` as an implicit curve parameter (scaling-law Fig 4 style:
+    EMA-smoothed dark-stroked curve + raw-scatter underlay + sparse
+    white-fill anchor markers)
+  - `ax_draw_scatter_paired` / `mode=scatter_paired` — paired A/B
+    comparison (two points + dark-edged colored connector per config);
+    binary `pair_field` picked from the first `pmlf`; connector color
+    encodes outcome magnitude on a shared colorbar
+  - `ax_draw_surface_3d` / `mode=surface_3d` — 3D surface from two
+    `x_fields` × one metric; `plot.py` conditionally adds
+    `subplot_kw={'projection': '3d'}` and disables `sharex/sharey`
+  - `ax_draw_parallel_coords` / `mode=parallel_coords` — wandb-style
+    parallel coordinates with cubic-Bezier curves between every pair of
+    adjacent axes; numeric + categorical per-axis normalization; color
+    driven by the last field (typically the outcome metric)
 - GitHub Actions workflow for automatic docs deployment to GitHub Pages
 - auto-generated changelog from git tags and commit messages
 - plot figures for documentation gallery and guides
