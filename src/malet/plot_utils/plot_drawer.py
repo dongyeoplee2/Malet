@@ -824,6 +824,8 @@ def ax_draw_iso_step_bezier(
     linestyle: str = ":",
     line_width: float = 0.7,
     color="0.3",
+    color_cmap: str | None = None,
+    color_cmap_range: tuple = (0.15, 0.80),
     alpha: float = 0.55,
     sort_by: Literal["x", "y", "given"] = "x",
     zorder: int = 4,
@@ -872,6 +874,20 @@ def ax_draw_iso_step_bezier(
     else:
         at_steps = np.asarray(at_steps, dtype=float)
 
+    # Precompute per-step colors when color_cmap is set (dark→light fade over time)
+    if color_cmap is not None:
+        import matplotlib.pyplot as plt
+        cmap_obj = plt.get_cmap(color_cmap)
+        s_lo = float(min(at_steps)); s_hi = float(max(at_steps))
+        s_rng = s_hi - s_lo if s_hi > s_lo else 1.0
+        r_lo, r_hi = color_cmap_range
+        def _step_color(s):
+            t = (float(s) - s_lo) / s_rng
+            return cmap_obj(r_lo + (r_hi - r_lo) * t)
+    else:
+        def _step_color(_s):
+            return color
+
     artists = []
     for st in at_steps:
         pts = []
@@ -899,7 +915,7 @@ def ax_draw_iso_step_bezier(
             verts.extend([c0, c1, (x1, y1)])
             codes.extend([mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4])
         path = mpath.Path(verts, codes)
-        patch = PathPatch(path, facecolor="none", edgecolor=color,
+        patch = PathPatch(path, facecolor="none", edgecolor=_step_color(st),
                           lw=line_width, linestyle=linestyle, alpha=alpha,
                           zorder=zorder)
         ax.add_patch(patch)
