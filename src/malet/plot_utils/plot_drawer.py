@@ -510,7 +510,7 @@ def ax_draw_scatter_trajectory(
                                       # the initial curve tangent direction;
                                       # any other string is passed to scatter
                                       # as marker (e.g. "o", "s", "^").
-    end_marker: str = "D",           # filled diamond (geometric, final)
+    end_marker: str = "s",           # filled square (geometric, final)
     start_markersize: int = 45,
     end_markersize: int = 45,
     vmin=None,
