@@ -657,12 +657,15 @@ def ax_draw_scatter_trajectory(
             marker_spec = (3, 0, angle)
         else:
             marker_spec = start_marker
+        # Endpoints are white-fill + thin dark edge — same family as the
+        # anchor checkpoint circles, just distinctive shapes (triangle =
+        # start, diamond = end) to mark trajectory boundaries.
         artists.append(
             ax.scatter(
                 [xs_s[0]], [ys_s[0]],
                 s=start_markersize, marker=marker_spec,
-                facecolor=this_color, edgecolor="black",
-                linewidths=1.0, zorder=10,
+                facecolor="white", edgecolor="black",
+                linewidths=0.9, zorder=10,
             )
         )
         # --- End marker ---
@@ -670,8 +673,8 @@ def ax_draw_scatter_trajectory(
             ax.scatter(
                 [xs_s[-1]], [ys_s[-1]],
                 s=end_markersize, marker=end_marker,
-                facecolor=this_color, edgecolor="black",
-                linewidths=1.2, zorder=11,
+                facecolor="white", edgecolor="black",
+                linewidths=0.9, zorder=11,
             )
         )
 
