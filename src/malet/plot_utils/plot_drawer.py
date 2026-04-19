@@ -512,7 +512,7 @@ def ax_draw_scatter_trajectory(
                                       # as marker (e.g. "o", "s", "^").
     end_marker: str = "D",           # filled diamond (geometric, final)
     start_markersize: int = 90,
-    end_markersize: int = 160,
+    end_markersize: int = 95,
     vmin=None,
     vmax=None,
     **_,
@@ -662,7 +662,7 @@ def ax_draw_scatter_trajectory(
                 [xs_s[0]], [ys_s[0]],
                 s=start_markersize, marker=marker_spec,
                 facecolor=this_color, edgecolor="black",
-                linewidths=1.0, zorder=4,
+                linewidths=1.0, zorder=10,
             )
         )
         # --- End marker ---
@@ -671,7 +671,7 @@ def ax_draw_scatter_trajectory(
                 [xs_s[-1]], [ys_s[-1]],
                 s=end_markersize, marker=end_marker,
                 facecolor=this_color, edgecolor="black",
-                linewidths=1.2, zorder=5,
+                linewidths=1.2, zorder=11,
             )
         )
 
