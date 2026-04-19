@@ -866,8 +866,12 @@ def ax_draw_iso_step_bezier(
         return []
 
     if at_steps is None:
-        lo = max(s.min() for s, _, _ in valid)
-        hi = min(s.max() for s, _, _ in valid)
+        # Span the UNION of all runs' step ranges (not the intersection),
+        # so later steps remain covered even after early-finishing runs
+        # drop out. Each at_step's inner filter then keeps only the runs
+        # whose range contains that step.
+        lo = min(s.min() for s, _, _ in valid)
+        hi = max(s.max() for s, _, _ in valid)
         if hi <= lo:
             return []
         at_steps = np.linspace(lo, hi, n_connect + 2)[1:-1]
