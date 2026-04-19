@@ -696,9 +696,10 @@ def ax_draw_parallel_coords(
     n_axes = len(fields)
     for i, (f, (_, tp, tl)) in enumerate(zip(fields, axis_infos)):
         ax.axvline(i, color=axis_line_color, lw=axis_line_width, zorder=1)
-        ax.text(i, 1.03, f, ha="center", va="bottom", fontsize=label_fontsize, zorder=5)
+        ax.text(i, 1.06, f, ha="center", va="bottom",
+                fontsize=label_fontsize + 1, fontweight="bold", zorder=5)
         for p, t in zip(tp, tl):
-            ax.text(i - 0.02, p, t, ha="right", va="center",
+            ax.text(i - 0.03, p, t, ha="right", va="center",
                     fontsize=tick_fontsize, zorder=4)
 
     # Color map for polylines
@@ -759,13 +760,109 @@ def ax_draw_parallel_coords(
         ax.add_patch(patch)
         artists.append(patch)
 
-    # Axes limits + cosmetics
-    ax.set_xlim(-0.2, n_axes - 0.8)
-    ax.set_ylim(-0.05, 1.12)
-    ax.set_xticks([])
+    # Axes limits + cosmetics — xticks at each vertical-axis position give
+    # a guaranteed-visible bottom label row; top text is a redundant header.
+    ax.set_xlim(-0.35, n_axes - 0.65)
+    ax.set_ylim(-0.08, 1.18)
+    ax.set_xticks(range(n_axes))
+    ax.set_xticklabels(fields, fontsize=label_fontsize)
     ax.set_yticks([])
-    for spine in ax.spines.values():
-        spine.set_visible(False)
+    ax.tick_params(axis="x", length=0, pad=4)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    ax.spines["bottom"].set_color(axis_line_color)
+    ax.spines["bottom"].set_linewidth(axis_line_width)
+
+    return artists
+
+
+def ax_draw_iso_step_bezier(
+    ax: Axes,
+    curves: list,
+    at_steps=None,
+    n_connect: int = 6,
+    linestyle: str = ":",
+    line_width: float = 0.7,
+    color="0.3",
+    alpha: float = 0.55,
+    sort_by: Literal["x", "y", "given"] = "x",
+    **_,
+) -> list:
+    """Thin dotted cubic-Bezier curves connecting SAME-step anchor points
+    across multiple trajectories. Post-hoc overlay for scatter_trajectory
+    plots — call AFTER all per-run ``ax_draw_scatter_trajectory`` calls.
+
+    Args:
+        curves: list of ``(steps_array, x_array, y_array)`` tuples, one per
+            trajectory. Each array must be sorted by ``step``.
+        at_steps: explicit shared step values at which to draw connectors.
+            If ``None``, picks ``n_connect`` values evenly in the common
+            step range (excluding endpoints).
+        n_connect: used only when ``at_steps`` is None.
+        sort_by: how to order points before building the Bezier path. "x"
+            (default) makes the connector monotone along x; "y" along y;
+            "given" preserves the caller's order in ``curves``.
+
+    Each shared step gets one path: cubic Bezier with horizontal tangents
+    between adjacent points (same pattern as ax_draw_parallel_coords).
+    """
+    import matplotlib.path as mpath
+    from matplotlib.patches import PathPatch
+
+    if len(curves) < 2:
+        return []
+
+    # Normalize input arrays + filter empty
+    valid = []
+    for c in curves:
+        s, x, y = c
+        s = np.asarray(s); x = np.asarray(x); y = np.asarray(y)
+        if len(s) >= 2 and len(s) == len(x) == len(y):
+            valid.append((s, x, y))
+    if len(valid) < 2:
+        return []
+
+    if at_steps is None:
+        lo = max(s.min() for s, _, _ in valid)
+        hi = min(s.max() for s, _, _ in valid)
+        if hi <= lo:
+            return []
+        at_steps = np.linspace(lo, hi, n_connect + 2)[1:-1]
+    else:
+        at_steps = np.asarray(at_steps, dtype=float)
+
+    artists = []
+    for st in at_steps:
+        pts = []
+        for s, x, y in valid:
+            if st < s.min() or st > s.max():
+                continue
+            xi = float(np.interp(st, s, x))
+            yi = float(np.interp(st, s, y))
+            pts.append((xi, yi))
+        if len(pts) < 2:
+            continue
+
+        if sort_by == "x":
+            pts.sort(key=lambda p: p[0])
+        elif sort_by == "y":
+            pts.sort(key=lambda p: p[1])
+
+        verts = [pts[0]]
+        codes = [mpath.Path.MOVETO]
+        for i in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+            dx = x1 - x0
+            c0 = (x0 + dx / 3.0, y0)
+            c1 = (x1 - dx / 3.0, y1)
+            verts.extend([c0, c1, (x1, y1)])
+            codes.extend([mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4])
+        path = mpath.Path(verts, codes)
+        patch = PathPatch(path, facecolor="none", edgecolor=color,
+                          lw=line_width, linestyle=linestyle, alpha=alpha,
+                          zorder=4)
+        ax.add_patch(patch)
+        artists.append(patch)
 
     return artists
 

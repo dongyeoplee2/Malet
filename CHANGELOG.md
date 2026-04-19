@@ -23,6 +23,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This project
   - `ax_draw_parallel_coords` / `mode=parallel_coords` — wandb-style
     parallel coordinates joined by cubic Bezier curves; handles numeric
     and categorical axes; colored by the last field
+  - `ax_draw_iso_step_bezier` — post-hoc overlay for scatter_trajectory
+    plots: thin dotted cubic-Bezier curves connecting SAME-step anchor
+    points across multiple trajectories (cross-run time-sync visual)
 
 ## [0.2.2] - 2026-03-15
 
