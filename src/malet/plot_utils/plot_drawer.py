@@ -1001,6 +1001,81 @@ def ax_draw_iso_step_bezier(
     return artists
 
 
+def ax_draw_endpoint_labels(
+    ax: Axes,
+    points: list,
+    *,
+    fontsize: int = 9,
+    x_offset_px: int = 10,
+    y_offset_px: int = 12,
+    y_cluster_frac: float = 0.06,
+    zorder: int = 7,
+    bbox_pad: float = 0.22,
+    bbox_alpha: float = 0.95,
+    edge_lw: float = 0.8,
+    connector: bool = True,
+    connector_color="0.5",
+    connector_lw: float = 0.5,
+    **_,
+) -> list:
+    """Draw per-curve endpoint labels with automatic y-stagger to avoid overlap.
+
+    Args:
+        points: iterable of ``(x, y, text)`` or ``(x, y, text, edge_color)``
+            tuples — one per trajectory endpoint.
+        y_cluster_frac: two endpoints are considered to collide when their
+            y-distance is less than this fraction of the overall y-range.
+            Colliding entries get alternating vertical offsets.
+        connector: when True, adds a thin line from the callout back to the
+            data point for non-default offsets (visual cue of which curve).
+
+    Returns list of matplotlib artists.
+    """
+    pts = []
+    for p in points:
+        if len(p) == 4:
+            x, y, text, ec = p
+        elif len(p) == 3:
+            x, y, text = p
+            ec = "0.5"
+        else:
+            raise ValueError(f"point must be (x, y, text) or (x, y, text, color); got {p!r}")
+        pts.append((float(x), float(y), str(text), ec))
+    if not pts:
+        return []
+
+    y_vals = [p[1] for p in pts]
+    y_rng = max(y_vals) - min(y_vals) or 1.0
+    pts.sort(key=lambda p: p[1])  # ascending y
+
+    artists = []
+    prev_y = None
+    cluster_idx = 0
+    for (x, y, text, ec) in pts:
+        if prev_y is not None and abs(y - prev_y) < y_cluster_frac * y_rng:
+            cluster_idx += 1
+        else:
+            cluster_idx = 0
+        prev_y = y
+        # Alternating vertical offsets: 0, +dy, -dy, +2dy, -2dy, ...
+        level = (cluster_idx + 1) // 2
+        sign = 1 if cluster_idx % 2 == 0 else -1
+        dy = (level + 1) * y_offset_px * sign if cluster_idx > 0 else y_offset_px
+        kwargs = dict(
+            xytext=(x_offset_px, dy), textcoords="offset points",
+            fontsize=fontsize, color="0.1",
+            bbox=dict(boxstyle=f"round,pad={bbox_pad}", fc="white",
+                      ec=ec, lw=edge_lw, alpha=bbox_alpha),
+            zorder=zorder,
+        )
+        if connector and cluster_idx > 0:
+            kwargs["arrowprops"] = dict(
+                arrowstyle="-", color=connector_color, lw=connector_lw,
+            )
+        artists.append(ax.annotate(text, (x, y), **kwargs))
+    return artists
+
+
 def ax_draw_scatter_paired(
     ax: Axes,
     df: pd.DataFrame,
