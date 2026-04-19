@@ -23,8 +23,12 @@ from .plot_utils.plot_drawer import (
     ax_draw_best_stared_curve,
     ax_draw_curve,
     ax_draw_heatmap,
+    ax_draw_parallel_coords,
     ax_draw_scatter,
     ax_draw_scatter_heat,
+    ax_draw_scatter_paired,
+    ax_draw_scatter_trajectory,
+    ax_draw_surface_3d,
 )
 from .plot_utils.utils import ax_styler, create_dir, default_style, merge_dict
 from .utils import df2richtable, get_wandb_sweep_exp_dir, str2value
@@ -170,6 +174,50 @@ def draw_metric(tsv_file, plot_config, save_name="", preprcs_df=lambda *x: x):
         assert len(pmlf) <= 1, f"Number of multi_line_fields should be less than {1}, but you passed {len(pmlf)}"
         ax_draw = partial(ax_draw_scatter_heat, y_fields=metrics)
         x_label, y_label = (f.replace("_", " ").capitalize() for f in metrics[:-1])
+
+    elif mode == "scatter_trajectory":
+        assert not x_fields, (
+            f"No x_fields are allowed in scatter_trajectory mode (step is implicit), but you passed {x_fields}."
+        )
+        assert len(metrics) == 2, (
+            f"Number of metric shoud be {2} when using scatter_trajectory mode, but you passed {metrics}."
+        )
+        assert len(pmlf) <= 2, f"Number of multi_line_fields should be <= {2}, but you passed {len(pmlf)}"
+        ax_draw = partial(ax_draw_scatter_trajectory, y_fields=metrics)
+        x_label, y_label = (f.replace("_", " ").capitalize() for f in metrics)
+
+    elif mode == "scatter_paired":
+        assert not x_fields, f"No x_fields are allowed in scatter_paired mode, but you passed {x_fields}."
+        assert len(metrics) == 2, (
+            f"Number of metric shoud be {2} when using scatter_paired mode, but you passed {metrics}."
+        )
+        assert len(pmlf) >= 1, (
+            "scatter_paired requires >= 1 multi_line_field — the first pmlf is used as the pair_field "
+            "(must have exactly 2 distinct values)."
+        )
+        ax_draw = partial(ax_draw_scatter_paired, y_fields=metrics, pair_field=pmlf[0])
+        x_label, y_label = (f.replace("_", " ").capitalize() for f in metrics)
+
+    elif mode == "surface_3d":
+        assert len(x_fields) == 2, (
+            f"Number of x_fields shoud be {2} when using surface_3d mode, but you passed {len(x_fields)}."
+        )
+        assert len(metrics) == 1, (
+            f"Number of metric shoud be {1} when using surface_3d mode, but you passed {metrics}."
+        )
+        assert not pmlf, f"No multi_line_fields are allowed in surface_3d mode, but you passed {pmlf}."
+        ax_draw = partial(ax_draw_surface_3d)
+        x_label, y_label = (f.replace("_", " ").capitalize() for f in x_fields)
+
+    elif mode == "parallel_coords":
+        # x_fields = the HP axes (left→right); metrics = the outcome axes (rightmost).
+        # The color is driven by the last metric by convention.
+        pc_fields = [*x_fields, *metrics]
+        assert len(pc_fields) >= 2, (
+            f"parallel_coords needs at least 2 fields total (x_fields + metrics), got {pc_fields}."
+        )
+        ax_draw = partial(ax_draw_parallel_coords, fields=pc_fields, color_field=metrics[-1] if metrics else pc_fields[-1])
+        x_label, y_label = "", ""
 
     # build save name
     save_name = __save_name_builder(pflt, pmlf, pcrf, pcfg, pani, save_name=save_name)
@@ -512,13 +560,16 @@ def draw_metric(tsv_file, plot_config, save_name="", preprcs_df=lambda *x: x):
             )
         ]
 
-        # prepare plot, set figure and axes for multiple plots, and leave place for cmap
+        # prepare plot, set figure and axes for multiple plots, and leave place for cmap.
+        # surface_3d needs projection='3d' on each subplot; shared axes don't apply.
+        _is_3d = mode == "surface_3d"
         fig, axs = plt.subplots(
             len(row_vs),
             len(col_vs) + int(has_cbar),
-            sharex=True,
-            sharey=True,
+            sharex=not _is_3d,
+            sharey=not _is_3d,
             gridspec_kw={"width_ratios": [1] * len(col_vs) + ([0.1] if has_cbar else [])},
+            subplot_kw={"projection": "3d"} if _is_3d else {},
         )
 
         # for 2d indexing of axs
