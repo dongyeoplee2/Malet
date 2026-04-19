@@ -511,8 +511,8 @@ def ax_draw_scatter_trajectory(
                                       # any other string is passed to scatter
                                       # as marker (e.g. "o", "s", "^").
     end_marker: str = "s",           # filled square (geometric, final)
-    start_markersize: int = 45,
-    end_markersize: int = 45,
+    start_markersize: int = 90,      # larger tangent-triangle (arrow cue)
+    end_markersize: int = 45,        # same as anchor circles
     vmin=None,
     vmax=None,
     **_,
