@@ -500,6 +500,9 @@ def ax_draw_scatter_trajectory(
     color="orange",
     cmap="viridis",
     smooth_alpha: float = 0.08,
+    smoothing_method: Literal["ema", "window", "gaussian"] = "gaussian",
+    smoothing_sigma: float = 3.0,     # for gaussian (samples)
+    smoothing_window: int = 7,        # for moving window (samples, odd)
     anchor_every: int = 10,
     anchor_at_steps=None,
     raw_alpha: float = 0.12,
@@ -580,10 +583,35 @@ def ax_draw_scatter_trajectory(
         except (ValueError, TypeError, StopIteration):
             pass
 
-    # EMA smooth y_vals (x_vals independently smoothed preserves curve shape)
+    # Smooth x / y independently. 'gaussian' preserves phase (no lag);
+    # 'window' = moving average; 'ema' = legacy exponential moving average.
     def _ema(arr):
         if len(arr) == 0:
             return arr
+        arr = np.asarray(arr, dtype=float)
+        if smoothing_method == "gaussian":
+            sigma = float(smoothing_sigma)
+            if sigma <= 0.0:
+                return arr
+            radius = max(1, int(3 * sigma))
+            t = np.arange(-radius, radius + 1)
+            kernel = np.exp(-0.5 * (t / sigma) ** 2)
+            kernel /= kernel.sum()
+            pad = radius
+            padded = np.concatenate([arr[:pad][::-1], arr, arr[-pad:][::-1]])
+            return np.convolve(padded, kernel, mode="valid")
+        if smoothing_method == "window":
+            w = int(max(1, smoothing_window))
+            if w <= 1:
+                return arr
+            kernel = np.ones(w) / w
+            pad = w // 2
+            padded = np.concatenate([arr[:pad][::-1], arr, arr[-pad:][::-1]])
+            smoothed = np.convolve(padded, kernel, mode="valid")
+            if len(smoothed) != len(arr):
+                smoothed = smoothed[:len(arr)]
+            return smoothed
+        # legacy "ema"
         out = [float(arr[0])]
         for v in arr[1:]:
             out.append(smooth_alpha * float(v) + (1 - smooth_alpha) * out[-1])
