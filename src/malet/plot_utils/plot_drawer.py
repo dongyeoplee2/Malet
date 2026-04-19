@@ -500,7 +500,7 @@ def ax_draw_scatter_trajectory(
     color="orange",
     cmap="viridis",
     smooth_alpha: float = 0.08,
-    smoothing_method: Literal["ema", "window", "gaussian"] = "ema",
+    smoothing_method: Literal["ema", "window", "gaussian"] = "gaussian",
     smoothing_sigma: float = 3.0,     # for gaussian (samples)
     smoothing_window: int = 7,        # for moving window (samples, odd)
     anchor_every: int = 10,
