@@ -1037,9 +1037,9 @@ def ax_draw_endpoint_labels(
     x_offset_px: int = 10,
     y_offset_px: int = 12,
     min_gap_px: float | None = None,
-    zorder: int = 7,
+    zorder: int = 12,              # above trajectory + endpoint markers
     bbox_pad: float = 0.22,
-    bbox_alpha: float = 0.95,
+    bbox_alpha: float = 1.0,       # fully opaque — blocks curves underneath
     edge_lw: float = 0.8,
     connector: bool = True,
     connector_color="0.5",
