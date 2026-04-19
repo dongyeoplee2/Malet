@@ -696,10 +696,10 @@ def ax_draw_parallel_coords(
     n_axes = len(fields)
     for i, (f, (_, tp, tl)) in enumerate(zip(fields, axis_infos)):
         ax.axvline(i, color=axis_line_color, lw=axis_line_width, zorder=1)
-        ax.text(i, 1.06, f, ha="center", va="bottom",
-                fontsize=label_fontsize + 1, fontweight="bold", zorder=5)
+        ax.text(i, 1.03, f, ha="center", va="bottom",
+                fontsize=label_fontsize, zorder=5)
         for p, t in zip(tp, tl):
-            ax.text(i - 0.03, p, t, ha="right", va="center",
+            ax.text(i - 0.02, p, t, ha="right", va="center",
                     fontsize=tick_fontsize, zorder=4)
 
     # Color map for polylines
@@ -760,18 +760,13 @@ def ax_draw_parallel_coords(
         ax.add_patch(patch)
         artists.append(patch)
 
-    # Axes limits + cosmetics — xticks at each vertical-axis position give
-    # a guaranteed-visible bottom label row; top text is a redundant header.
-    ax.set_xlim(-0.35, n_axes - 0.65)
-    ax.set_ylim(-0.08, 1.18)
-    ax.set_xticks(range(n_axes))
-    ax.set_xticklabels(fields, fontsize=label_fontsize)
+    # Axes limits + cosmetics
+    ax.set_xlim(-0.2, n_axes - 0.8)
+    ax.set_ylim(-0.05, 1.12)
+    ax.set_xticks([])
     ax.set_yticks([])
-    ax.tick_params(axis="x", length=0, pad=4)
-    for side in ("top", "right", "left"):
-        ax.spines[side].set_visible(False)
-    ax.spines["bottom"].set_color(axis_line_color)
-    ax.spines["bottom"].set_linewidth(axis_line_width)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
 
     return artists
 
