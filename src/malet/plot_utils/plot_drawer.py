@@ -501,9 +501,15 @@ def ax_draw_scatter_trajectory(
     cmap="viridis",
     smooth_alpha: float = 0.08,
     anchor_every: int = 10,
+    anchor_at_steps=None,
     raw_alpha: float = 0.12,
     stroke_width=4.4,
     curve_width=2.6,
+    show_endpoints: bool = True,
+    start_marker: str = "o",
+    end_marker: str = "*",
+    start_markersize: int = 45,
+    end_markersize: int = 220,
     vmin=None,
     vmax=None,
     **_,
@@ -600,16 +606,55 @@ def ax_draw_scatter_trajectory(
         path_effects=[pe.withStroke(linewidth=stroke_width, foreground="black")],
         zorder=2,
     )
-    # Sparse white-fill anchor circles
+    # Sparse white-fill anchor circles.
+    # anchor_at_steps (list of absolute step values) overrides anchor_every
+    # for stability under animation — anchors stay pinned to fixed steps
+    # across frames instead of re-indexing by sample count.
     n = len(xs_s)
-    if n > 0 and anchor_every > 0:
-        idx = np.linspace(0, n - 1, num=min(anchor_every, n)).astype(int)
+    if n > 0:
+        step_vals = np.asarray(wide.index.to_list(), dtype=float)
+        if anchor_at_steps is not None and len(list(anchor_at_steps)) > 0:
+            anchor_steps_arr = np.asarray(list(anchor_at_steps), dtype=float)
+            valid = anchor_steps_arr[(anchor_steps_arr >= step_vals.min())
+                                     & (anchor_steps_arr <= step_vals.max())]
+            if len(valid) > 0:
+                idx = np.array([int(np.argmin(np.abs(step_vals - s))) for s in valid])
+                artists.append(
+                    ax.scatter(
+                        xs_s[idx], ys_s[idx],
+                        s=40, marker="o",
+                        facecolor="white", edgecolor="black",
+                        linewidths=0.8, zorder=6,
+                    )
+                )
+        elif anchor_every > 0:
+            idx = np.linspace(0, n - 1, num=min(anchor_every, n)).astype(int)
+            artists.append(
+                ax.scatter(
+                    xs_s[idx], ys_s[idx],
+                    s=40, marker="o",
+                    facecolor="white", edgecolor="black",
+                    linewidths=0.8, zorder=6,
+                )
+            )
+
+    # Start + end endpoint markers — always on by default for trajectory plots.
+    # Start: small empty circle (outlined); end: larger filled star.
+    if show_endpoints and n >= 2:
         artists.append(
             ax.scatter(
-                xs_s[idx], ys_s[idx],
-                s=22, marker="o",
+                [xs_s[0]], [ys_s[0]],
+                s=start_markersize, marker=start_marker,
                 facecolor="white", edgecolor="black",
-                linewidths=0.6, zorder=3,
+                linewidths=0.9, zorder=4,
+            )
+        )
+        artists.append(
+            ax.scatter(
+                [xs_s[-1]], [ys_s[-1]],
+                s=end_markersize, marker=end_marker,
+                facecolor=this_color, edgecolor="black",
+                linewidths=1.0, zorder=5,
             )
         )
 
