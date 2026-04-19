@@ -781,6 +781,7 @@ def ax_draw_iso_step_bezier(
     color="0.3",
     alpha: float = 0.55,
     sort_by: Literal["x", "y", "given"] = "x",
+    zorder: int = 4,
     **_,
 ) -> list:
     """Thin dotted cubic-Bezier curves connecting SAME-step anchor points
@@ -855,7 +856,7 @@ def ax_draw_iso_step_bezier(
         path = mpath.Path(verts, codes)
         patch = PathPatch(path, facecolor="none", edgecolor=color,
                           lw=line_width, linestyle=linestyle, alpha=alpha,
-                          zorder=4)
+                          zorder=zorder)
         ax.add_patch(patch)
         artists.append(patch)
 
