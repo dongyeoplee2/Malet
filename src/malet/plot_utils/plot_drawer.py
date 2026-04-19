@@ -506,10 +506,13 @@ def ax_draw_scatter_trajectory(
     stroke_width=4.4,
     curve_width=2.6,
     show_endpoints: bool = True,
-    start_marker: str = "o",
-    end_marker: str = "*",
-    start_markersize: int = 45,
-    end_markersize: int = 220,
+    start_marker: str = "tangent",   # "tangent" = triangle rotated to
+                                      # the initial curve tangent direction;
+                                      # any other string is passed to scatter
+                                      # as marker (e.g. "o", "s", "^").
+    end_marker: str = "D",           # filled diamond (geometric, final)
+    start_markersize: int = 90,
+    end_markersize: int = 160,
     vmin=None,
     vmax=None,
     **_,
@@ -638,23 +641,37 @@ def ax_draw_scatter_trajectory(
                 )
             )
 
-    # Start + end endpoint markers — always on by default for trajectory plots.
-    # Start: small empty circle (outlined); end: larger filled star.
+    # Start + end endpoint markers.
+    # Start: triangle rotated to match the initial curve tangent direction
+    # (arrow-like "going this way"). End: filled diamond (clean, final).
     if show_endpoints and n >= 2:
+        # --- Start marker ---
+        if start_marker == "tangent":
+            import math
+            dx = float(xs_s[1] - xs_s[0])
+            dy = float(ys_s[1] - ys_s[0])
+            # matplotlib (n_sides=3, style=0, rotation=deg). rotation=0 points
+            # UP; positive rotation is COUNTER-clockwise. To point toward
+            # (dx, dy), rotation = -degrees(atan2(dx, dy)).
+            angle = -math.degrees(math.atan2(dx, dy)) if (dx or dy) else 0.0
+            marker_spec = (3, 0, angle)
+        else:
+            marker_spec = start_marker
         artists.append(
             ax.scatter(
                 [xs_s[0]], [ys_s[0]],
-                s=start_markersize, marker=start_marker,
-                facecolor="white", edgecolor="black",
-                linewidths=0.9, zorder=4,
+                s=start_markersize, marker=marker_spec,
+                facecolor=this_color, edgecolor="black",
+                linewidths=1.0, zorder=4,
             )
         )
+        # --- End marker ---
         artists.append(
             ax.scatter(
                 [xs_s[-1]], [ys_s[-1]],
                 s=end_markersize, marker=end_marker,
                 facecolor=this_color, edgecolor="black",
-                linewidths=1.0, zorder=5,
+                linewidths=1.2, zorder=5,
             )
         )
 
